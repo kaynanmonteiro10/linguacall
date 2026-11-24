@@ -46,6 +46,7 @@ O **LinguaCall Pro** agora é um **Progressive Web App (PWA)** completo:
 
 - **WebRTC P2P (PeerJS):** Comunicação de vídeo e áudio de ponta a ponta sem servidores intermediários cobrando por tráfego.
 - **Web Speech API:** Transcrição de fala em tempo real pelo próprio navegador, sem chave de API.
+- **Transcrição no Android:** O áudio da chamada também alimenta um modelo Whisper pequeno no próprio aparelho, evitando a disputa pelo microfone entre WebRTC e Web Speech. No primeiro uso, o navegador baixa o modelo (cerca de 40 MB) e pode levar algum tempo para prepará-lo. O app mostra esse estado na barra de escuta. O modelo é carregado do Hugging Face e a biblioteca de transcrição do jsDelivr; depois do carregamento, o áudio da transcrição fica no aparelho. Em celulares lentos, as legendas podem chegar com atraso.
 - **Tradução Gratuita:** Google Translate como motor principal e MyMemory como reserva, ambos sem chave.
 - **Tradução no Destinatário:** Cada participante traduz as falas recebidas para o idioma em que escolheu ler.
 - **Armazenamento Local:** Histórico, notas e configurações ficam no navegador do usuário (`localStorage`).
@@ -63,7 +64,7 @@ O **LinguaCall Pro** agora é um **Progressive Web App (PWA)** completo:
 4. A outra pessoa abre o link e toca em **Entrar na Sala**.
 5. Ative o alto-falante se quiser ouvir a tradução. As legendas aparecem mesmo com a voz desativada.
 
-O LinguaCall é para chamadas **1:1**. Para melhor compatibilidade, use Chrome ou Edge atualizados no Android ou no computador. No iPhone/Safari, onde o reconhecimento de fala não está disponível, use o chat ou o modo de voz direta.
+O LinguaCall é para chamadas **1:1**. Para melhor compatibilidade, use Chrome ou Edge atualizados no Android ou no computador. No iPhone/Safari, o reconhecimento de fala depende do suporte e das permissões do navegador; se ele falhar, use o chat ou o modo de voz direta.
 
 ## Limitações e privacidade
 

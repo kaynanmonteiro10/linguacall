@@ -1932,6 +1932,151 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Barra de status da escuta: em uma linha, o que está acontecendo de verdade.
   // É isto que mostra se o Android está ouvindo ou parado.
+  const useAndroidStt = /Android/i.test(navigator.userAgent);
+  const androidStt = {
+    status: 'idle', worker: null, context: null, source: null, node: null,
+    frames: [], frameCount: 0, silenceFrames: 0, voiceFrames: 0, preroll: [],
+    busy: false, pending: [], session: 0, error: ''
+  };
+
+  function resetAndroidSpeech() {
+    androidStt.frames = [];
+    androidStt.frameCount = 0;
+    androidStt.silenceFrames = 0;
+    androidStt.voiceFrames = 0;
+  }
+
+  function sendNextAndroidChunk() {
+    if (!androidStt.worker || androidStt.busy || !androidStt.pending.length || !state.callActive) return;
+    androidStt.busy = true;
+    androidStt.worker.postMessage({ type: 'transcribe', audio: androidStt.pending.shift(), lang: state.speakLang });
+  }
+
+  function flushAndroidSpeech() {
+    if (androidStt.voiceFrames >= 2 && androidStt.frameCount >= 8000) {
+      const audio = new Float32Array(androidStt.frameCount);
+      let offset = 0;
+      for (const frame of androidStt.frames) {
+        audio.set(frame, offset);
+        offset += frame.length;
+      }
+      // Mantém a memória limitada quando a inferência demora em um celular lento.
+      if (androidStt.pending.length < 2) androidStt.pending.push(audio);
+      sendNextAndroidChunk();
+    }
+    resetAndroidSpeech();
+  }
+
+  function handleAndroidAudio(frame) {
+    if (!state.callActive || state.isMuted || androidStt.status !== 'ready') {
+      resetAndroidSpeech();
+      return;
+    }
+    let power = 0;
+    for (let i = 0; i < frame.length; i++) power += frame[i] * frame[i];
+    const hasVoice = Math.sqrt(power / frame.length) > 0.008;
+    if (!androidStt.frameCount) {
+      if (!hasVoice) {
+        androidStt.preroll.push(frame);
+        if (androidStt.preroll.length > 4) androidStt.preroll.shift();
+        return;
+      }
+      androidStt.frames = androidStt.preroll.splice(0);
+      androidStt.frameCount = androidStt.frames.reduce((total, part) => total + part.length, 0);
+    }
+    androidStt.frames.push(frame);
+    androidStt.frameCount += frame.length;
+    if (hasVoice) androidStt.voiceFrames++;
+    androidStt.silenceFrames = hasVoice ? 0 : androidStt.silenceFrames + 1;
+    if (androidStt.silenceFrames >= 7 || androidStt.frameCount >= 8 * 16000) flushAndroidSpeech();
+  }
+
+  async function startAndroidAudio(session) {
+    const track = state.localStream?.getAudioTracks()[0];
+    if (!track || track.readyState !== 'live') throw new Error('Faixa de áudio indisponível');
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const context = new Ctx();
+    androidStt.context = context;
+    await context.audioWorklet.addModule('./android-stt-processor.js');
+    if (androidStt.session !== session || !state.callActive) return;
+    const source = context.createMediaStreamSource(new MediaStream([track]));
+    const node = new AudioWorkletNode(context, 'android-stt-processor');
+    const silent = context.createGain();
+    silent.gain.value = 0;
+    node.port.onmessage = ({ data }) => handleAndroidAudio(data);
+    source.connect(node).connect(silent).connect(context.destination);
+    androidStt.source = source;
+    androidStt.node = node;
+    await context.resume();
+    androidStt.status = 'ready';
+    updateListenStatusBar();
+    updateVoiceDiag();
+  }
+
+  function startAndroidStt() {
+    if (!useAndroidStt || !state.callActive || androidStt.status === 'loading' || androidStt.status === 'ready') return;
+    stopAndroidStt();
+    const session = ++androidStt.session;
+    androidStt.status = 'loading';
+    androidStt.error = '';
+    updateListenStatusBar();
+    const fail = (message) => {
+      if (androidStt.session !== session) return;
+      stopAndroidStt();
+      androidStt.status = 'failed';
+      androidStt.error = message;
+      updateListenStatusBar();
+      updateVoiceDiag();
+      showNotificationOnce('android-stt-error', 'Falha ao carregar a transcrição local. Verifique a internet e toque em Religar.');
+    };
+    let worker;
+    try {
+      worker = new Worker('./android-stt-worker.js', { type: 'module' });
+      androidStt.worker = worker;
+    } catch (error) {
+      fail(error.message);
+      return;
+    }
+    worker.onmessage = ({ data }) => {
+      if (androidStt.session !== session || !state.callActive) return;
+      if (data.type === 'progress') {
+        const txt = document.getElementById('listenStatusText');
+        if (txt && androidStt.status === 'loading') txt.textContent = `Preparando transcrição no Android: ${data.progress}%`;
+      } else if (data.type === 'ready') {
+        startAndroidAudio(session).catch(error => fail(error.message));
+      } else if (data.type === 'result') {
+        androidStt.busy = false;
+        if (data.text) {
+          diag.lastResultAt = Date.now();
+          diag.lastResultText = data.text;
+          sendSpeechNow(data.text);
+          updateVoiceDiag();
+        }
+        sendNextAndroidChunk();
+      } else if (data.type === 'error') {
+        fail(data.message);
+      }
+    };
+    worker.onerror = (event) => {
+      fail(event.message || 'Falha ao iniciar a transcrição');
+    };
+    worker.postMessage({ type: 'load' });
+  }
+
+  function stopAndroidStt() {
+    androidStt.session++;
+    androidStt.node?.disconnect();
+    androidStt.source?.disconnect();
+    androidStt.context?.close().catch(() => {});
+    androidStt.worker?.terminate();
+    androidStt.node = androidStt.source = androidStt.context = androidStt.worker = null;
+    androidStt.busy = false;
+    androidStt.pending = [];
+    androidStt.preroll = [];
+    resetAndroidSpeech();
+    androidStt.status = 'idle';
+  }
+
   function updateListenStatusBar() {
     const dot = document.getElementById('listenDot');
     const txt = document.getElementById('listenStatusText');
@@ -1945,16 +2090,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (fix) fix.classList.toggle('hidden', !showFix);
     };
 
-    if (!SpeechRecognition) {
-      setBar('bg-neutral-600', 'Escuta: este navegador não transcreve voz (use o microfone com ondas)', false);
-      return;
-    }
     if (!state.callActive) {
       setBar('bg-neutral-600', 'Escuta desligada fora da chamada', false);
       return;
     }
     if (state.isMuted) {
       setBar('bg-neutral-600', 'Escuta pausada: microfone mudo', false);
+      return;
+    }
+    if (useAndroidStt) {
+      if (androidStt.status === 'loading') setBar('bg-accent-500', 'Preparando transcrição no Android…', false);
+      else if (androidStt.status === 'failed') setBar('bg-danger-500', 'Transcrição indisponível — toque em Religar', true);
+      else if (androidStt.status === 'ready') setBar('bg-ok-500', 'Transcrição local ligada — pode falar', false);
+      else setBar('bg-accent-500', 'Iniciando transcrição local…', false);
+      return;
+    }
+    if (!SpeechRecognition) {
+      setBar('bg-neutral-600', 'Escuta: este navegador não transcreve voz (use o microfone com ondas)', false);
       return;
     }
     if (state.speechBlocked) {
@@ -1984,6 +2136,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Vigia da escuta: se ela parar (o Chrome encerra a sessão a cada ~60s,
   // troca de aba, tela bloqueada), religa em até 3s.
   setInterval(() => {
+    if (useAndroidStt) return;
     if (!state.callActive || !callScreen || callScreen.classList.contains('hidden')) return;
     if (!state.autoRestartSpeech || state.speechUnsupported || state.speechBlocked || state.isMuted) return;
     if (!state.localStream || !speechRecognizer) return;
@@ -2038,7 +2191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     // No iPhone/Safari não existe reconhecimento: avisa uma vez, de forma tranquila
-    if (!SpeechRecognition) el.classList.remove('hidden');
+    if (!SpeechRecognition && !useAndroidStt) el.classList.remove('hidden');
     else el.classList.add('hidden');
   }
 
@@ -2047,7 +2200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const text = document.getElementById('speechWarningText');
     if (!bar || !text) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    if (!SpeechRecognition && !useAndroidStt) {
       text.textContent = 'Este navegador (iPhone/Safari) não reconhece voz: o colega precisa digitar no chat ou usar "Falar meu texto traduzido".';
       bar.classList.remove('hidden');
     } else if (state.speechBlocked) {
@@ -2064,7 +2217,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1) Escuta
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    if (useAndroidStt && androidStt.status === 'ready') {
+      diagSet('diagSpeechStatus', 'Ouvindo localmente', 'text-ok-400');
+      const hint = document.getElementById('diagSpeechHint');
+      if (hint) hint.textContent = 'O áudio da chamada está sendo transcrito no próprio aparelho.';
+    } else if (useAndroidStt && androidStt.status !== 'idle') {
+      diagSet('diagSpeechStatus', androidStt.status === 'failed' ? 'Falhou' : 'Carregando', 'text-accent-400');
+      const hint = document.getElementById('diagSpeechHint');
+      if (hint) hint.textContent = androidStt.status === 'failed' ? androidStt.error : 'Baixando o modelo de transcrição. Aguarde antes de falar.';
+    } else if (!SpeechRecognition) {
       diagSet('diagSpeechStatus', 'Indisponível', 'text-danger-400');
       const hint = document.getElementById('diagSpeechHint');
       if (hint) hint.textContent = 'Este navegador não tem reconhecimento de voz (o iPhone/Safari não tem). Sem ele, a fala do colega não é transcrita nem traduzida automaticamente: ele precisa digitar no chat ou usar o botão "Falar meu texto traduzido".';
@@ -2217,7 +2378,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // preenche as dicas com o estado real, sem esperar um clique
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const hint = document.getElementById('diagSpeechHint');
-    if (hint && !SpeechRecognition) {
+    if (hint && !SpeechRecognition && !useAndroidStt) {
       hint.textContent = 'Este navegador não tem reconhecimento de voz (o iPhone/Safari não tem). Sem ele, a fala do colega não é transcrita nem traduzida automaticamente: ele precisa digitar no chat ou usar o botão "Falar meu texto traduzido".';
     }
     // dicas iniciais imediatas para nenhuma linha ficar com "—"
@@ -2654,6 +2815,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function initSpeechRecognition() {
     if (!state.callActive) return;
+    if (useAndroidStt) {
+      startAndroidStt();
+      return;
+    }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       // iPhone/Safari não têm reconhecimento de voz: avisa e segue com o chat + tradução
@@ -2756,6 +2921,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Reinicia a escuta já com o novo idioma (sem isso ela fica parada após a troca)
   function restartSpeechRecognition(reason) {
+    if (useAndroidStt) {
+      startAndroidStt();
+      return;
+    }
     if (!state.callActive || state.speechUnsupported) return;
     if (!speechRecognizer) { initSpeechRecognition(); return; }
     try {
@@ -3376,6 +3545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveCallNotes(state.roomId);
 
     state.callActive = false;
+    stopAndroidStt();
     clearReconnectTimers();
     clearTimeout(speechRestartTimer);
     clearTimeout(speechBuffer.timer);
