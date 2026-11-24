@@ -1233,7 +1233,8 @@ document.addEventListener('DOMContentLoaded', () => {
     state.speakLang = e.target.value;
     if (inCallSpeakLang) inCallSpeakLang.value = state.speakLang;
     localStorage.setItem('lc_speak_lang', state.speakLang);
-    if (speechRecognizer) speechRecognizer.lang = state.speakLang;
+    if (localLangBadge) localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
+    if (speechRecognizer) restartSpeechRecognition(null);
   });
   on(selectTargetLang, 'change', (e) => {
     state.targetLang = e.target.value;
@@ -1469,6 +1470,7 @@ document.addEventListener('DOMContentLoaded', () => {
         connectToPeer(roomId);
       }
       if (!speechRecognizer) initSpeechRecognition();
+      else restartSpeechRecognition(null);
       updateVoiceDiag();
       updateSpeechWarningBar();
     });
@@ -1584,8 +1586,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function attachRemoteStream(remoteStream) {
     state.remoteStream = remoteStream;
-    if (remoteVideo) remoteVideo.srcObject = remoteStream;
-    if (remoteAudioFallback) remoteAudioFallback.srcObject = remoteStream;
+    if (remoteVideo) {
+      // O vídeo remoto NUNCA pode ser mudo: no Android o autoplay silencia
+      // o elemento e a voz do colega desaparece.
+      remoteVideo.muted = false;
+      remoteVideo.volume = 1;
+      remoteVideo.srcObject = remoteStream;
+    }
+    if (remoteAudioFallback) {
+      remoteAudioFallback.muted = false;
+      remoteAudioFallback.volume = 1;
+      remoteAudioFallback.srcObject = remoteStream;
+    }
 
     const videoTracks = remoteStream.getVideoTracks();
     if (videoTracks.length > 0 && videoTracks[0].enabled) {
@@ -1596,8 +1608,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
     }
 
-    if (remoteVideo) remoteVideo.play().catch(() => {});
-    if (remoteAudioFallback) remoteAudioFallback.play().catch(() => {});
+    guardPlayback(remoteVideo, 'vídeo');
+    guardPlayback(remoteAudioFallback, 'áudio');
     
     updateConnectionBadge('Conectado', 'connected');
     if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Conectado';
@@ -1826,6 +1838,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Vigia da escuta: se ela parar (o Chrome encerra a sessão a cada ~60s,
+  // troca de aba, tela bloqueada), religa em até 3s.
+  setInterval(() => {
+    if (!callScreen || callScreen.classList.contains('hidden')) return;
+    if (state.speechUnsupported || state.speechBlocked || state.isMuted) return;
+    if (!state.localStream || !speechRecognizer) return;
+    if (isRecognitionRunning) return;
+    try {
+      speechRecognizer.lang = state.speakLang;
+      speechRecognizer.start();
+    } catch (e) {}
+  }, 3000);
+
   // ==========================================
   // DIAGNÓSTICO DE VOZ (o que está travando a conversa)
   // ==========================================
@@ -1845,7 +1870,13 @@ document.addEventListener('DOMContentLoaded', () => {
     lastSpokenAt: 0,
     lastRemoteAt: 0,
     lastRemoteText: '',
-    lastRemoteTranslated: ''
+    lastRemoteTranslated: '',
+    lastResultAt: 0,
+    lastResultText: '',
+    lastLocalSentAt: 0,
+    lastLocalSentText: '',
+    restarts: 0,
+    playBlocked: false
   };
 
   function diagSet(id, text, colorClass) {
@@ -1954,7 +1985,31 @@ document.addEventListener('DOMContentLoaded', () => {
         : 'Ligada a leitura: o botão de alto-falante na barra de baixo (voz lendo a tradução).';
     }
 
-    // 5) Última fala do colega
+    // 5) Minha fala saindo (o pedaço que o Chrome devolveu e o que já foi enviado)
+    const sendHint = document.getElementById('diagSendHint');
+    if (diag.lastLocalSentAt) {
+      const s2 = Math.round((Date.now() - diag.lastLocalSentAt) / 1000);
+      diagSet('diagSendStatus', `Enviada (${s2}s atrás)`, 'text-ok-400');
+      if (sendHint) sendHint.textContent = `"${(diag.lastLocalSentText || '').slice(0, 90)}"`;
+    } else if (diag.lastResultAt) {
+      const s3 = Math.round((Date.now() - diag.lastResultAt) / 1000);
+      diagSet('diagSendStatus', `Ouvida (${s3}s)`, 'text-accent-400');
+      if (sendHint) sendHint.textContent = `Reconhecido: "${(diag.lastResultText || '').slice(0, 90)}" — aguardando a pausa para enviar.`;
+    } else if (isRecognitionRunning) {
+      diagSet('diagSendStatus', 'Escutando…', 'text-neutral-400');
+      if (sendHint) sendHint.textContent = 'A escuta está ligada, mas nada foi reconhecido ainda. Fale mais perto do microfone.';
+    } else {
+      diagSet('diagSendStatus', 'Nada enviado', 'text-danger-400');
+      if (sendHint) sendHint.textContent = 'A escuta não está ativa. Toque em "Testar agora".';
+    }
+
+    // 6) Última fala do colega
+    if (diag.playBlocked) {
+      diagSet('diagRemoteStatus', 'Som bloqueado', 'text-danger-400');
+      const h0 = document.getElementById('diagRemoteHint');
+      if (h0) h0.textContent = 'O navegador bloqueou o som até você tocar na tela. Toque em qualquer lugar da chamada.';
+      return;
+    }
     if (diag.lastRemoteAt) {
       const secs = Math.round((Date.now() - diag.lastRemoteAt) / 1000);
       const ago = secs < 60 ? `${secs}s atrás` : `${Math.round(secs / 60)}min atrás`;
@@ -2064,12 +2119,106 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
+  // DESBLOQUEIO DE ÁUDIO (autoplay do celular)
+  // ==========================================
+  // Android/iPhone bloqueiam som sem toque na tela. Este áudio silencioso,
+  // iniciado no primeiro toque, libera o canal para a voz do colega.
+  let audioUnlocked = false;
+  function unlockAudioPlayback() {
+    if (audioUnlocked) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) {
+        const ctx = new Ctx();
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0.0001;
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.05);
+      }
+      if (remoteAudioFallback) {
+        remoteAudioFallback.muted = false;
+        remoteAudioFallback.play().catch(() => {});
+      }
+      if (remoteVideo) {
+        remoteVideo.muted = false;
+        remoteVideo.play().catch(() => {});
+      }
+      audioUnlocked = true;
+    } catch (e) {}
+  }
+  ['pointerdown', 'touchstart', 'click'].forEach(evt => {
+    window.addEventListener(evt, unlockAudioPlayback, { once: true, passive: true });
+  });
+
+  // Se o navegador bloquear a reprodução, avisa e reage no próximo toque
+  function guardPlayback(el, label) {
+    if (!el) return;
+    el.addEventListener('play', () => { diag.playBlocked = false; updateVoiceDiag(); });
+    el.play && el.play().catch(() => {
+      diag.playBlocked = true;
+      updateVoiceDiag();
+      showNotificationOnce('play-blocked', 'Toque na tela uma vez para liberar o som do colega.');
+    });
+  }
+
+  // ==========================================
   // RECONHECIMENTO DE FALA
   // ==========================================
   let speechRecognizer = null;
   let isRecognitionRunning = false;
   let localCaptionTimeout = null;
   let remoteCaptionTimeout = null;
+
+  // Junta os pedaços que o Chrome manda e fecha a frase por pausa.
+  // Sem isso, frases longas se perdem: cada pedaço sobrescreve o anterior.
+  const speechBuffer = {
+    text: '',
+    lang: '',
+    timer: null,
+    flushAt: 0,
+    lastSent: '',
+    lastSentAt: 0
+  };
+
+  function flushSpeechBuffer(reason) {
+    clearTimeout(speechBuffer.timer);
+    speechBuffer.timer = null;
+    const phrase = (speechBuffer.text || '').trim();
+    speechBuffer.text = '';
+    if (!phrase) return;
+    // evita repetir a mesma frase (o Chrome às vezes reemite o resultado final)
+    const now = Date.now();
+    if (phrase === speechBuffer.lastSent && now - speechBuffer.lastSentAt < 4000) return;
+    speechBuffer.lastSent = phrase;
+    speechBuffer.lastSentAt = now;
+
+    sendData({
+      type: 'speech',
+      sender: state.userName,
+      text: phrase,
+      lang: speechBuffer.lang || state.speakLang,
+      timestamp: now
+    });
+
+    addTranscriptItem({
+      sender: state.userName,
+      isSelf: true,
+      original: phrase,
+      translated: null,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    diag.lastLocalSentAt = now;
+    diag.lastLocalSentText = phrase;
+    updateVoiceDiag();
+  }
+
+  function scheduleSpeechFlush(delay) {
+    clearTimeout(speechBuffer.timer);
+    speechBuffer.timer = setTimeout(() => flushSpeechBuffer('pausa'), delay);
+  }
 
   function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2095,43 +2244,38 @@ document.addEventListener('DOMContentLoaded', () => {
     speechRecognizer.onresult = (event) => {
       if (state.isMuted) return;
 
-      let interimTranscript = '';
-      let finalTranscript = '';
+      let interim = '';
+      let finalPart = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
+        const res = event.results[i];
+        const txt = (res[0] && res[0].transcript) ? res[0].transcript : '';
+        if (res.isFinal) finalPart += txt;
+        else interim += txt;
       }
 
       triggerSpeakingWave(true);
+      diag.lastResultAt = Date.now();
+      diag.lastResultText = (finalPart || interim || '').trim();
 
-      const currentText = (finalTranscript || interimTranscript).trim();
-      if (currentText) {
-        showLocalCaption(currentText);
+      // Acumula a fala final no buffer da frase
+      if (finalPart.trim()) {
+        speechBuffer.lang = state.speakLang;
+        speechBuffer.text = (speechBuffer.text ? speechBuffer.text + ' ' : '') + finalPart.trim();
+        // fecha a frase 900ms depois da última parte final (pausa natural)
+        scheduleSpeechFlush(900);
+      } else if (interim.trim()) {
+        // enquanto a pessoa fala sem parar, não deixa a frase crescer para sempre
+        if (speechBuffer.text && Date.now() - (speechBuffer.flushAt || 0) > 7000) {
+          flushSpeechBuffer('longa');
+        }
       }
 
-      if (finalTranscript.trim()) {
-        const cleanText = finalTranscript.trim();
-
-        sendData({
-          type: 'speech',
-          sender: state.userName,
-          text: cleanText,
-          lang: state.speakLang,
-          timestamp: Date.now()
-        });
-
-        addTranscriptItem({
-          sender: state.userName,
-          isSelf: true,
-          original: cleanText,
-          translated: null,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        });
-      }
+      // legenda local mostra a frase em construção + o que está sendo falado
+      const preview = (speechBuffer.text + ' ' + interim).trim();
+      if (preview) showLocalCaption(preview);
+      if (speechBuffer.text && !speechBuffer.flushAt) speechBuffer.flushAt = Date.now();
+      updateVoiceDiag();
     };
 
     speechRecognizer.onerror = (event) => {
@@ -2148,6 +2292,12 @@ document.addEventListener('DOMContentLoaded', () => {
         showNotificationOnce('rec-net', 'A escuta depende da internet e a conexão falhou. Vou tentar de novo.');
       } else if (code === 'language-not-supported') {
         showNotificationOnce('lang-ns', 'Este navegador não reconhece o idioma escolhido. Troque em "Falo" para PT ou EN.');
+      } else if (code === 'no-speech') {
+        // normal: ninguém falou na sessão. Não faz nada, o vigia religa.
+      } else if (code === 'aborted') {
+        // normal: reinício intencional
+      } else {
+        showNotificationOnce('rec-' + code, 'A escuta deu o erro "' + code + '". Veja o Diagnóstico de voz (tecla D).');
       }
       updateVoiceDiag();
     };
@@ -2155,6 +2305,10 @@ document.addEventListener('DOMContentLoaded', () => {
     speechRecognizer.onend = () => {
       isRecognitionRunning = false;
       diag.isListening = false;
+      // o Chrome encerra a sessão a cada ~60s: fecha a frase antes de religar
+      flushSpeechBuffer('fim de sessão');
+      speechBuffer.flushAt = 0;
+      diag.restarts = (diag.restarts || 0) + 1;
       updateVoiceDiag();
       if (state.speechBlocked) return;
       if (state.autoRestartSpeech && !state.isMuted && state.localStream) {
