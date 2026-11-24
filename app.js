@@ -2556,6 +2556,42 @@ document.addEventListener('DOMContentLoaded', () => {
     updateVoiceDiag();
   }
 
+  // Envia um trecho assim que o navegador reconhece — sem espera nenhuma
+  function sendSpeechNow(piece) {
+    const clean = (piece || '').trim();
+    if (!clean) return;
+    const now = Date.now();
+    if (clean === speechBuffer.lastSent && now - speechBuffer.lastSentAt < 1200) return;
+    speechBuffer.lastSent = clean;
+    speechBuffer.lastSentAt = now;
+
+    sendData({
+      type: 'speech',
+      sender: state.userName,
+      text: clean,
+      lang: state.speakLang,
+      timestamp: now
+    });
+    addTranscriptItem({
+      sender: state.userName,
+      isSelf: true,
+      original: clean,
+      translated: null,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    diag.lastLocalSentAt = now;
+    diag.lastLocalSentText = clean;
+    updateVoiceDiag();
+  }
+
+  // Se a pessoa pausou e voltou a falar, o trecho novo é independente
+  function markSpeechBoundary() {
+    if (Date.now() - (speechBuffer.lastSentAt || 0) > 1500) {
+      speechBuffer.text = '';
+      speechBuffer.flushAt = 0;
+    }
+  }
+
   function scheduleSpeechFlush(delay) {
     clearTimeout(speechBuffer.timer);
     speechBuffer.timer = setTimeout(() => flushSpeechBuffer('pausa'), delay);
@@ -2599,17 +2635,12 @@ document.addEventListener('DOMContentLoaded', () => {
       diag.lastResultAt = Date.now();
       diag.lastResultText = (finalPart || interim || '').trim();
 
-      // Acumula a fala final no buffer da frase
+      // TEMPO REAL: o trecho final vai embora na mesma hora, sem pausa de espera.
       if (finalPart.trim()) {
+        markSpeechBoundary();
         speechBuffer.lang = state.speakLang;
-        speechBuffer.text = (speechBuffer.text ? speechBuffer.text + ' ' : '') + finalPart.trim();
-        // fecha a frase 900ms depois da última parte final (pausa natural)
-        scheduleSpeechFlush(450);
-      } else if (interim.trim()) {
-        // enquanto a pessoa fala sem parar, não deixa a frase crescer para sempre
-        if (speechBuffer.text && Date.now() - (speechBuffer.flushAt || 0) > 7000) {
-          flushSpeechBuffer('longa');
-        }
+        sendSpeechNow(finalPart.trim());
+        speechBuffer.text = '';
       }
 
       // legenda local mostra a frase em construção + o que está sendo falado
@@ -2776,22 +2807,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Cache de traduções: frases repetidas (cumprimentos, "oi", "tudo bem") saem na hora
-  const translationCache = new Map();
-  function cacheKey(text, src, tgt) { return src + '|' + tgt + '|' + text.trim().toLowerCase(); }
-
   async function translateText(text, fromLang, toLang) {
     const src = (fromLang || 'auto').split('-')[0].toLowerCase();
     const tgt = (toLang || 'pt').split('-')[0].toLowerCase();
 
     if (src === tgt && src !== 'auto') return text;
-
-    const key = cacheKey(text, src, tgt);
-    if (translationCache.has(key)) return translationCache.get(key);
-    const remember = (value) => {
-      if (value && translationCache.size < 400) translationCache.set(key, value);
-      return value;
-    };
 
     // Motor único: Google Translate (grátis, sem chave). Medido em ~1,1s.
     try {
@@ -2799,7 +2819,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const gRes = await fetchWithTimeout(gUrl, 4000);
       if (gRes && gRes.ok) {
         const gJson = await gRes.json();
-        if (gJson && gJson[0]) return remember(gJson[0].map(item => item[0]).join(''));
+        if (gJson && gJson[0]) return gJson[0].map(item => item[0]).join('');
       }
     } catch (e) {}
 
@@ -2809,12 +2829,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetchWithTimeout(url, 5000);
       if (res && res.ok) {
         const data = await res.json();
-        if (data.responseData?.translatedText) return remember(data.responseData.translatedText);
+        if (data.responseData?.translatedText) return data.responseData.translatedText;
       }
     } catch (e) {}
 
     return text;
   }
+
+  // Fila de traduções: cada trecho traduz na hora, em paralelo.
+  // Nada espera a vez do anterior (era isso que criava o atraso em cascata).
+  let speechSeq = 0;
+  let speechRendered = 0;
+  const speechPending = new Map();
 
   async function handleRemoteSpeech(data) {
     triggerSpeakingWave(false);
@@ -2823,7 +2849,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Antes a tela ficava 1,5-2s só com "Traduzindo..." e parecia travada.
     showRemoteCaption(data.sender || 'Colega', data.text, data.translated || '…');
 
+    const seq = ++speechSeq;
     const translated = data.translated || await translateText(data.text, data.lang, state.targetLang);
+    speechPending.set(seq, { data, translated });
+
+    // mostra em ordem: se um trecho anterior ainda está voltando, segura este
+    while (speechPending.has(speechRendered + 1)) {
+      const next = speechPending.get(speechRendered + 1);
+      speechPending.delete(speechRendered + 1);
+      speechRendered++;
+      renderRemoteSpeech(next.data, next.translated);
+    }
+
     diag.lastTranslateOk = !!translated;
     diag.lastTranslateFrom = data.lang || '?';
     diag.lastTranslateTo = state.targetLang;
@@ -2833,6 +2870,9 @@ document.addEventListener('DOMContentLoaded', () => {
     diag.lastRemoteTranslated = translated || '';
     updateVoiceDiag();
 
+  }
+
+  function renderRemoteSpeech(data, translated) {
     showRemoteCaption(data.sender || 'Colega', data.text, translated);
     addLiveCaption(data.sender || 'Colega', data.text, translated, false);
     setTimeout(playSoftBeep, 0);
