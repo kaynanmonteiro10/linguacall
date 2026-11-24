@@ -1,0 +1,24 @@
+{
+  "name": "LinguaCall Pro - Tradução ao Vivo",
+  "short_name": "LinguaCall",
+  "description": "Chamadas de vídeo e voz com tradução simultânea em tempo real por Kaynan Monteiro.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

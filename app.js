@@ -1,6 +1,7 @@
 /**
  * LinguaCall Pro - Conexão WebRTC com Grade Desktop & Mobile,
- * Filtros de Câmera, Controle de Volume, Tela Cheia e Síntese de Fala Push-to-Talk
+ * PWA Service Worker, Filtros de Câmera, Controle de Volume, Tela Cheia,
+ * Síntese de Fala Push-to-Talk e Créditos para Kaynan Monteiro.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -14,6 +15,37 @@ document.addEventListener('DOMContentLoaded', () => {
       el.addEventListener(event, callback);
     }
   }
+
+  // ==========================================
+  // REGISTRO DE SERVICE WORKER & PWA INSTALL
+  // ==========================================
+  let deferredPrompt = null;
+  const btnInstallPwa = document.getElementById('btnInstallPwa');
+
+  if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('./sw.js').then(() => {
+      console.log('PWA Service Worker registrado com sucesso!');
+    }).catch(err => console.warn('Service Worker erro:', err));
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (btnInstallPwa) {
+      btnInstallPwa.classList.remove('hidden');
+    }
+  });
+
+  on(btnInstallPwa, 'click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        btnInstallPwa.classList.add('hidden');
+      }
+      deferredPrompt = null;
+    }
+  });
 
   // Aviso de protocolo file://
   const isFileProtocol = window.location.protocol === 'file:';
@@ -93,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const viewSpecificCallModal = document.getElementById('viewSpecificCallModal');
   const statsModal = document.getElementById('statsModal');
   const filtersModal = document.getElementById('filtersModal');
+  const creatorModal = document.getElementById('creatorModal');
   const savedCallsList = document.getElementById('savedCallsList');
 
   // Estado da Aplicação
@@ -132,7 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
     callStartTime: null,
     timerInterval: null,
     
-    // HISTÓRICO ISOLADO DA CHAMADA ATUAL
     transcriptHistory: []
   };
 
@@ -156,17 +188,28 @@ document.addEventListener('DOMContentLoaded', () => {
   if (roomFromUrl && inputRoomCode) inputRoomCode.value = roomFromUrl;
 
   // ==========================================
-  // NOVAS FUNÇÕES: VOLUME, FILTROS, TELA CHEIA E PUSH-TO-TALK
+  // MODAL SOBRE O CRIADOR (KAYNAN MONTEIRO)
   // ==========================================
+  function openCreatorModal() {
+    if (creatorModal) creatorModal.classList.remove('hidden');
+  }
+  function closeCreatorModal() {
+    if (creatorModal) creatorModal.classList.add('hidden');
+  }
+  on('btnOpenCreatorModal', 'click', openCreatorModal);
+  on('btnCreatorLinkFooter', 'click', openCreatorModal);
+  on('btnCloseCreatorModal', 'click', closeCreatorModal);
+  on('btnCloseCreatorModalBtn', 'click', closeCreatorModal);
 
-  // 1. Controle de Volume do Colega Remoto
+  // ==========================================
+  // VOLUME, FILTROS, TELA CHEIA E PUSH-TO-TALK
+  // ==========================================
   on('sliderRemoteVolume', 'input', (e) => {
     const vol = parseFloat(e.target.value) / 100;
     if (remoteAudioFallback) remoteAudioFallback.volume = vol;
     if (remoteVideo) remoteVideo.volume = vol;
   });
 
-  // 2. Filtros de Câmera
   on('btnCameraFilters', 'click', () => {
     if (filtersModal) filtersModal.classList.remove('hidden');
   });
@@ -182,7 +225,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 3. Modo Tela Cheia
   on('btnToggleFullscreen', 'click', () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -191,19 +233,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 4. Push-to-Talk: Falar Meu Texto Traduzido para o Colega
   on('btnSpeakMyText', 'click', async () => {
     const text = inputChatFallback ? inputChatFallback.value.trim() : '';
     if (!text) {
-      showNotification('Digite uma mensagem no campo antes.');
+      showNotification('Digite uma mensagem antes.');
       return;
     }
     inputChatFallback.value = '';
 
-    showNotification('Traduzindo e falando com o colega...');
+    showNotification('Traduzindo e sintetizando voz...');
     const translated = await translateText(text, state.speakLang, state.targetLang);
 
-    // Envia comando para tocar TTS direto no aparelho do colega
     sendData({
       type: 'remote_tts',
       sender: state.userName,
@@ -222,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // ARQUIVAMENTO DE REUNIÕES PASSADAS (LOCALSTORAGE)
+  // ARQUIVAMENTO DE REUNIÕES PASSADAS
   // ==========================================
   function saveCallToArchive(roomId, durationStr, history) {
     if (!history || history.length === 0) return;
@@ -323,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnDownload) {
       btnDownload.onclick = () => {
-        let txt = `RELATORIO DA REUNIAO - LINGUACALL\nData: ${record.date}\nSala: ${record.id}\nDuracao: ${record.duration}\n\n`;
+        let txt = `RELATORIO DA REUNIAO - LINGUACALL\nData: ${record.date}\nSala: ${record.id}\nDuracao: ${record.duration}\nCriado por Kaynan Monteiro\n\n`;
         record.messages.forEach(m => {
           txt += `[${m.timestamp}] ${m.sender}:\n  ${m.translated || m.original}\n`;
           if (m.original && m.translated) txt += `  (Original: ${m.original})\n`;
@@ -333,8 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
-    savedCallsModal.classList.add('hidden');
-    viewSpecificCallModal.classList.remove('hidden');
+    savedCallsModal?.classList.add('hidden');
+    viewSpecificCallModal?.classList.remove('hidden');
   }
 
   on('btnOpenSavedCallsModal', 'click', () => {
@@ -399,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 80);
 
     } catch (e) {
-      alert('Não foi possível acessar o microfone para teste. Verifique as permissões.');
+      alert('Não foi possível acessar o microfone para teste.');
       stopMicTest();
       if (btn) btn.textContent = 'Testar áudio';
     }
@@ -567,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Nenhuma conversa nesta chamada ainda para exportar.');
       return;
     }
-    let txt = `RELATORIO DE REUNIAO - LINGUACALL\nData: ${new Date().toLocaleString()}\nSala: ${state.roomId}\n\n`;
+    let txt = `RELATORIO DE REUNIAO - LINGUACALL PRO\nData: ${new Date().toLocaleString()}\nSala: ${state.roomId}\nCriado por Kaynan Monteiro\n\n`;
     state.transcriptHistory.forEach(m => {
       txt += `[${m.timestamp}] ${m.sender}:\n  ${m.translated || m.original}\n`;
       if (m.original && m.translated) txt += `  (Original: ${m.original})\n`;
@@ -595,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Nada para copiar ainda.');
       return;
     }
-    let text = `Transcrição LinguaCall (${state.roomId}):\n\n`;
+    let text = `Transcrição LinguaCall (${state.roomId}) - Por Kaynan Monteiro:\n\n`;
     state.transcriptHistory.forEach(m => {
       const c = m.isSelf ? m.original : `${m.translated} (Original: ${m.original})`;
       text += `[${m.timestamp}] ${m.sender}: ${c}\n`;
@@ -796,7 +836,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupCallUI(roomId) {
     state.roomId = roomId;
     
-    // Zera o histórico para esta nova chamada
     state.transcriptHistory = [];
     if (transcriptList) {
       transcriptList.innerHTML = '<div class="text-center py-8 text-slate-500"><p>Histórico iniciado para a sala: ' + escapeHtml(roomId) + '</p></div>';
@@ -1005,7 +1044,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (data.type === 'reaction') {
       triggerFloatingEmoji(data.emoji, false);
     } else if (data.type === 'remote_tts') {
-      // O colega enviou texto sintetizado
       speakText(data.translated, data.lang);
       addTranscriptItem({
         sender: data.sender + ' (Voz)',
@@ -1496,7 +1534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (lobbyScreen) lobbyScreen.classList.remove('hidden');
     updateConnectionBadge('Desconectado', 'ready');
     window.history.pushState({}, '', window.location.pathname);
-    showNotification('Reunião finalizada e salva em "Reuniões Passadas"!');
+    showNotification('Reunião finalizada e salva em "Reuniões"!');
   }
 
   function showNotification(msg) {

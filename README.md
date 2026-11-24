@@ -1,20 +1,51 @@
-# 🌐 LinguaCall Pro - Chamadas de Vídeo & Voz com Tradução ao Vivo
+# 🌐 LinguaCall Pro - Chamadas Globais com Tradução ao Vivo
 
-Aplicação web completa para chamadas internacionais com **tradução de voz em tempo real**, câmera dupla simultânea, espelhamento, gravação da reunião e exportação avançada de histórico.
+> Um projeto criado com o propósito de aproximar o mundo, derrubar barreiras linguísticas e conectar pessoas através da tecnologia.
 
 ---
 
-## 🚀 Funcionalidades da Versão Pro
+## 👨‍💻 Sobre o Criador
 
-1. 🗣️ **Tradução ao Vivo na Tela:** Legendas nítidas sobrepostas diretamente no vídeo do colega em tempo real.
-2. 🔄 **Troca Rápida de Idiomas na Chamada:** Alterne o idioma que fala ou lê a qualquer momento sem sair da sala.
-3. 🪞 **Espelhar Câmera Frontal (Mirror On/Off):** Botão para desativar ou ativar o efeito de espelho e ver o rosto normal sem distorção.
-4. 📷 **Câmera Dupla (Dual Camera):** Suporte a exibição simultânea da câmera frontal e traseira no mesmo card.
-5. ⏺️ **Gravação Local da Reunião:** Grave o vídeo e áudio da chamada e baixe o arquivo `.webm` diretamente no seu aparelho.
-6. 📊 **Exportação Avançada do Histórico:**
-   - Baixar em `.txt` formatado
-   - Baixar em `.csv` para Excel e Google Sheets
-   - Copiar tudo para a área de transferência com 1 clique
-7. ⏱️ **Cronômetro da Reunião:** Temporizador em tempo real no topo da chamada.
-8. 🎉 **Reações com Emojis Flutuantes:** Envie reações ao vivo que sobem na tela para os dois participantes.
-9. 📱 **Layout Mobile Otimizado:** Vídeo do colega em tela cheia com PiP flutuante e histórico em gaveta deslizante.
+**Criado e idealizado por Kaynan Monteiro.**
+
+- **Idade:** 21 anos
+- **Nacionalidade:** Brasileiro 🇧🇷
+- **Perfil:** Estudante, profissional e entusiasta apaixonado por tecnologia e inteligência artificial.
+- **Dedicação:** Projeto desenvolvido com dedicação contínua ao longo de quase 6 meses de trabalho, pesquisa e engenharia de software.
+
+### 💖 A Mensagem do Criador
+
+> *"Criei isso com o intuito de ajudar as pessoas a se comunicarem de uma forma melhor, respeitando todas as regras e políticas. Tem como intuito ajudar os amigos que não falam o mesmo idioma, os amores que as pessoas encontram por meio do meio digital e qualquer pessoa que queira se conectar com o mundo.*
+>
+> *Agradeço a todos e obrigado por usar o LinguaCall!"*
+> 
+> — **Kaynan Monteiro**
+
+---
+
+## 📜 Licença e Termos de Uso (Open Source Não Comercial)
+
+Este é um projeto **Open Source** criado para o bem comum e para a comunidade:
+
+- ✅ **Melhorias e Estudos Permitidos:** Você é livre para estudar o código, aprender, contribuir com melhorias, enviar correções e adaptar para uso pessoal ou educacional.
+- 🚫 **Proibida a Comercialização:** Fica estritamente proibida qualquer comercialização, venda, monetização direta ou indireta, ou apropriação indevida do projeto e de seu nome sem autorização expressa do criador.
+- ⚖️ **Atribuição Obrigatória:** Todo e qualquer uso ou bifurcação (fork) deve obrigatoriamente manter os créditos originais para **Kaynan Monteiro**.
+
+---
+
+## 📱 Suporte a PWA (Progressive Web App)
+
+O **LinguaCall Pro** agora é um **Progressive Web App (PWA)** completo:
+- Você pode **instalá-lo como um aplicativo nativo** diretamente no celular (Android via Chrome ou iOS via Safari no botão "Adicionar à Tela de Início") e no computador (Chrome/Edge no botão "Instalar").
+- Funciona em tela cheia sem a barra de navegação do browser.
+- Conta com Service Worker (`sw.js`) e Manifesto PWA (`manifest.json`).
+
+---
+
+## 🛠️ Arquitetura e Tecnologias
+
+- **WebRTC P2P (PeerJS):** Comunicação de vídeo e áudio de ponta a ponta sem servidores intermediários cobrando por tráfego.
+- **Web Speech API:** Transcrição de fala em tempo real nativa de alta fidelidade.
+- **Motor Duplo de Tradução:** Tradução em tempo real gratuita embutida com suporte opcional à Google Gemini AI.
+- **Armazenamento Seguro Local:** Histórico de reuniões gravado isoladamente por sala no navegador do usuário (`localStorage`), sem enviar dados pessoais para bancos de dados de terceiros.
+- **Tailwind CSS & Lucide Icons:** Interface responsiva moderna com suporte mobile-first e desktop.
