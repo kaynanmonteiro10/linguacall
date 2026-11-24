@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     speakLang: localStorage.getItem('lc_speak_lang') || 'pt-BR',
     targetLang: localStorage.getItem('lc_target_lang') || 'pt',
     engine: localStorage.getItem('lc_engine') || 'mymemory',
-    geminiKey: localStorage.getItem('lc_gemini_key') || '',
+    engine: 'google',
     autoRestartSpeech: true,
     enableBeep: localStorage.getItem('lc_beep') !== 'false',
     enableBlur: localStorage.getItem('lc_blur_bg') === 'true',
@@ -200,18 +200,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (inCallSpeakLang) inCallSpeakLang.value = state.speakLang;
   if (inCallTargetLang) inCallTargetLang.value = state.targetLang;
   
-  const selectTranslateEngine = document.getElementById('selectTranslateEngine');
-  const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
-  const geminiKeyContainer = document.getElementById('geminiKeyContainer');
   const checkAudioBeep = document.getElementById('checkAudioBeep');
   const checkBackgroundBlur = document.getElementById('checkBackgroundBlur');
   const checkAutoReconnect = document.getElementById('checkAutoReconnect');
-  if (selectTranslateEngine) selectTranslateEngine.value = state.engine;
-  if (inputGeminiApiKey) inputGeminiApiKey.value = state.geminiKey;
   if (checkAudioBeep) checkAudioBeep.checked = state.enableBeep;
   if (checkBackgroundBlur) checkBackgroundBlur.checked = state.enableBlur;
   if (checkAutoReconnect) checkAutoReconnect.checked = state.autoReconnect;
-  if (geminiKeyContainer && state.engine === 'gemini') geminiKeyContainer.classList.remove('hidden');
 
   applyMirrorSetting();
   applyBlurSetting();
@@ -1080,19 +1074,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Configurações
   on('btnSettings', 'click', () => settingsModal?.classList.remove('hidden'));
   on('btnCloseSettings', 'click', () => settingsModal?.classList.add('hidden'));
-  on(selectTranslateEngine, 'change', (e) => {
-    if (e.target.value === 'gemini') geminiKeyContainer?.classList.remove('hidden');
-    else geminiKeyContainer?.classList.add('hidden');
-  });
-
   on('btnSaveSettings', 'click', () => {
-    state.engine = selectTranslateEngine ? selectTranslateEngine.value : 'mymemory';
-    state.geminiKey = inputGeminiApiKey ? inputGeminiApiKey.value.trim() : '';
+    state.engine = 'google';
     state.enableBeep = checkAudioBeep ? checkAudioBeep.checked : true;
     state.autoReconnect = checkAutoReconnect ? checkAutoReconnect.checked : true;
     if (checkBackgroundBlur) state.enableBlur = checkBackgroundBlur.checked;
-    localStorage.setItem('lc_engine', state.engine);
-    localStorage.setItem('lc_gemini_key', state.geminiKey);
+    localStorage.setItem('lc_engine', 'google');
     localStorage.setItem('lc_beep', state.enableBeep);
     localStorage.setItem('lc_blur_bg', state.enableBlur);
     localStorage.setItem('lc_auto_reconnect', state.autoReconnect);
@@ -2392,7 +2379,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
   }
 
-  // Transcrição: usa o Gemini quando há chave (aceita áudio direto).
+  // Transcrição: usa o reconhecimento do próprio navegador (sem chave).
   // Sem chave, avisa com clareza em vez de falhar em silêncio.
   async function transcribeAudio(blob) {
     // Sem chave nenhuma: o próprio navegador transcreve (Chrome/Android tem isso de graça)
@@ -2422,30 +2409,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (text) return { text, lang: state.speakLang.split('-')[0] };
       throw new Error('sem texto');
     }
-    if (state.engine === 'gemini' && state.geminiKey) {
-      const base64 = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onloadend = () => resolve(String(r.result || '').split(',')[1] || '');
-        r.onerror = reject;
-        r.readAsDataURL(blob);
-      });
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.geminiKey}`;
-      const body = {
-        contents: [{
-          parts: [
-            { text: `Transcreva este áudio no idioma original e responda só com o texto transcrito. Se estiver em outro idioma, transcreva mesmo assim.` },
-            { inline_data: { mime_type: blob.type || 'audio/webm', data: base64 } }
-          ]
-        }]
-      };
-      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error('gemini ' + res.status);
-      const json = await res.json();
-      const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (!text) throw new Error('vazio');
-      return { text, lang: state.speakLang.split('-')[0] };
-    }
-    throw new Error('sem chave de transcrição');
+    throw new Error('sem transcrição');
   }
 
   function openSafeMic() {
@@ -2829,25 +2793,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return value;
     };
 
-    if (state.engine === 'gemini' && state.geminiKey) {
-      try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.geminiKey}`;
-        const prompt = `Translate this speech into "${tgt}". Only return translated text, nothing else: "${text}"`;
-        const res = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const t = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (t) return remember(t);
-        }
-      } catch (e) {}
-    }
-
-    // Google primeiro: medido em 0,75s. MyMemory levava 1,5s+ e só entrava depois,
-    // então TODA frase esperava o mais lento primeiro. Agora a ordem é a do mais rápido.
+    // Motor único: Google Translate (grátis, sem chave). Medido em ~1,1s.
     try {
       const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${src}&tl=${tgt}&dt=t&q=${encodeURIComponent(text)}`;
       const gRes = await fetchWithTimeout(gUrl, 4000);
@@ -2857,6 +2803,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {}
 
+    // Reserva: só se o Google não responder (instabilidade da rede)
     try {
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}`;
       const res = await fetchWithTimeout(url, 5000);
