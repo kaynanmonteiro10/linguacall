@@ -138,7 +138,7 @@
         <div>
           <h1 class="font-bold text-sm leading-tight text-white flex items-center gap-1.5">
             LinguaCall Pro
-            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v12</span>
+            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v13</span>
           </h1>
           <p class="text-[10px] text-neutral-400">Criado por Kaynan Monteiro</p>
         </div>
@@ -447,6 +447,13 @@
               <span id="chatNotificationBadge" class="hidden absolute top-0.5 right-0.5 w-2 h-2 bg-accent-500 rounded-full"></span>
             </button>
           </div>
+        </div>
+
+        <!-- STATUS DA ESCUTA: mostra na hora se o Android está ouvindo -->
+        <div id="listenStatusBar" class="px-3 py-1.5 border-b border-line bg-surface flex items-center gap-2 flex-shrink-0 text-[11px]">
+          <span id="listenDot" class="w-1.5 h-1.5 rounded-full bg-neutral-600 flex-shrink-0"></span>
+          <span id="listenStatusText" class="text-neutral-400 flex-1 truncate">Escuta: iniciando…</span>
+          <button id="btnFixListening" class="hidden flex-shrink-0 px-2 h-6 rounded bg-raised hover:bg-line text-neutral-200 text-[11px]">Religar</button>
         </div>
 
         <!-- CONVITE: visível dentro da chamada, inclusive no celular -->

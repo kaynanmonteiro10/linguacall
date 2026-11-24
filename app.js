@@ -1489,6 +1489,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateVoiceDiag();
       updateSpeechWarningBar();
       updateCompatNotice();
+      updateListenStatusBar();
     });
 
     state.peer.on('call', (incomingCall) => {
@@ -1855,6 +1856,53 @@ document.addEventListener('DOMContentLoaded', () => {
       handleIncomingChat(data);
     }
   }
+
+  // Barra de status da escuta: em uma linha, o que está acontecendo de verdade.
+  // É isto que mostra se o Android está ouvindo ou parado.
+  function updateListenStatusBar() {
+    const dot = document.getElementById('listenDot');
+    const txt = document.getElementById('listenStatusText');
+    const fix = document.getElementById('btnFixListening');
+    if (!dot || !txt) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const setBar = (color, message, showFix) => {
+      dot.className = 'w-1.5 h-1.5 rounded-full flex-shrink-0 ' + color;
+      txt.textContent = message;
+      if (fix) fix.classList.toggle('hidden', !showFix);
+    };
+
+    if (!SpeechRecognition) {
+      setBar('bg-neutral-600', 'Escuta: este navegador não transcreve voz (use o microfone com ondas)', false);
+      return;
+    }
+    if (state.isMuted) {
+      setBar('bg-neutral-600', 'Escuta pausada: microfone mudo', false);
+      return;
+    }
+    if (state.speechBlocked) {
+      setBar('bg-danger-500', 'Escuta bloqueada pelo navegador — libere o microfone e recarregue', true);
+      return;
+    }
+    if (isRecognitionRunning) {
+      const last = diag.lastResultAt ? Math.round((Date.now() - diag.lastResultAt) / 1000) : null;
+      setBar('bg-ok-500',
+        last === null ? `Escuta ligada (${state.speakLang}) — pode falar` : `Escuta ligada (${state.speakLang}) — última fala há ${last}s`,
+        false);
+      return;
+    }
+    setBar('bg-accent-500',
+      diag.speechError ? `Escuta parada (${diag.speechError}) — toque em Religar` : 'Escuta parada — toque em Religar',
+      true);
+  }
+  on('btnFixListening', 'click', () => {
+    state.speechBlocked = false;
+    diag.speechError = null;
+    shownNotices.delete('mic-blocked');
+    restartSpeechRecognition('Religando a escuta…');
+    setTimeout(updateListenStatusBar, 600);
+  });
+  setInterval(updateListenStatusBar, 1000);
 
   // Vigia da escuta: se ela parar (o Chrome encerra a sessão a cada ~60s,
   // troca de aba, tela bloqueada), religa em até 3s.
