@@ -1,15 +1,13 @@
 /**
- * LinguaCall Pro - Conexão WebRTC com Isolamento de Histórico por Sala
- * e Arquivamento Permanente de Reuniões Passadas
+ * LinguaCall Pro - Conexão WebRTC com Grade Desktop & Mobile,
+ * Filtros de Câmera, Controle de Volume, Tela Cheia e Síntese de Fala Push-to-Talk
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Inicialização segura dos ícones
   try {
     if (window.lucide) lucide.createIcons();
   } catch(e) {}
 
-  // Função auxiliar segura para adicionar event listener sem quebrar se o elemento não existir
   function on(idOrEl, event, callback) {
     const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
     if (el) {
@@ -24,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fileProtocolWarning.classList.remove('hidden');
   }
 
-  // Telas e Header
+  // Elementos do Layout
   const mainHeader = document.getElementById('mainHeader');
   const lobbyScreen = document.getElementById('lobbyScreen');
   const callScreen = document.getElementById('callScreen');
@@ -33,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const callTimerDisplay = document.getElementById('callTimerDisplay');
   const reactionOverlay = document.getElementById('reactionOverlay');
   
-  // Inputs do Lobby
+  // Lobby Inputs
   const inputUserName = document.getElementById('inputUserName');
   const selectSpeakLang = document.getElementById('selectSpeakLang');
   const selectTargetLang = document.getElementById('selectTargetLang');
@@ -73,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const remoteLiveCaptionTranslated = document.getElementById('remoteLiveCaptionTranslated');
   const remoteLiveCaptionOriginal = document.getElementById('remoteLiveCaptionOriginal');
 
-  // Controles
+  // Controles da Chamada
   const btnToggleMic = document.getElementById('btnToggleMic');
   const iconMic = document.getElementById('iconMic');
   const btnToggleCamera = document.getElementById('btnToggleCamera');
@@ -94,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedCallsModal = document.getElementById('savedCallsModal');
   const viewSpecificCallModal = document.getElementById('viewSpecificCallModal');
   const statsModal = document.getElementById('statsModal');
+  const filtersModal = document.getElementById('filtersModal');
   const savedCallsList = document.getElementById('savedCallsList');
 
   // Estado da Aplicação
@@ -137,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
     transcriptHistory: []
   };
 
-  // Carregar dados salvos
   if (inputUserName) inputUserName.value = state.userName;
   if (selectSpeakLang) selectSpeakLang.value = state.speakLang;
   if (selectTargetLang) selectTargetLang.value = state.targetLang;
@@ -158,6 +156,72 @@ document.addEventListener('DOMContentLoaded', () => {
   if (roomFromUrl && inputRoomCode) inputRoomCode.value = roomFromUrl;
 
   // ==========================================
+  // NOVAS FUNÇÕES: VOLUME, FILTROS, TELA CHEIA E PUSH-TO-TALK
+  // ==========================================
+
+  // 1. Controle de Volume do Colega Remoto
+  on('sliderRemoteVolume', 'input', (e) => {
+    const vol = parseFloat(e.target.value) / 100;
+    if (remoteAudioFallback) remoteAudioFallback.volume = vol;
+    if (remoteVideo) remoteVideo.volume = vol;
+  });
+
+  // 2. Filtros de Câmera
+  on('btnCameraFilters', 'click', () => {
+    if (filtersModal) filtersModal.classList.remove('hidden');
+  });
+  on('btnCloseFiltersModal', 'click', () => {
+    if (filtersModal) filtersModal.classList.add('hidden');
+  });
+  document.querySelectorAll('.btnApplyFilter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filter = btn.dataset.filter;
+      if (localVideo) localVideo.style.filter = filter;
+      filtersModal?.classList.add('hidden');
+      showNotification('Filtro aplicado!');
+    });
+  });
+
+  // 3. Modo Tela Cheia
+  on('btnToggleFullscreen', 'click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  });
+
+  // 4. Push-to-Talk: Falar Meu Texto Traduzido para o Colega
+  on('btnSpeakMyText', 'click', async () => {
+    const text = inputChatFallback ? inputChatFallback.value.trim() : '';
+    if (!text) {
+      showNotification('Digite uma mensagem no campo antes.');
+      return;
+    }
+    inputChatFallback.value = '';
+
+    showNotification('Traduzindo e falando com o colega...');
+    const translated = await translateText(text, state.speakLang, state.targetLang);
+
+    // Envia comando para tocar TTS direto no aparelho do colega
+    sendData({
+      type: 'remote_tts',
+      sender: state.userName,
+      text: text,
+      translated: translated,
+      lang: state.targetLang
+    });
+
+    addTranscriptItem({
+      sender: state.userName + ' (Voz)',
+      isSelf: true,
+      original: text,
+      translated: translated,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+  });
+
+  // ==========================================
   // ARQUIVAMENTO DE REUNIÕES PASSADAS (LOCALSTORAGE)
   // ==========================================
   function saveCallToArchive(roomId, durationStr, history) {
@@ -171,11 +235,9 @@ document.addEventListener('DOMContentLoaded', () => {
         totalSpeeches: history.length,
         messages: history
       };
-      existing.unshift(newRecord); // Mais recente primeiro
-      localStorage.setItem('lc_saved_calls', JSON.stringify(existing.slice(0, 30))); // Guarda até 30 reuniões
-    } catch(e) {
-      console.warn('Erro ao salvar no arquivo de reuniões:', e);
-    }
+      existing.unshift(newRecord);
+      localStorage.setItem('lc_saved_calls', JSON.stringify(existing.slice(0, 40)));
+    } catch(e) {}
   }
 
   function renderSavedCallsList() {
@@ -213,7 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
       savedCallsList.appendChild(item);
     });
 
-    // Ações dos itens
     document.querySelectorAll('.btnViewCall').forEach(b => {
       b.addEventListener('click', () => {
         const idx = parseInt(b.dataset.idx);
@@ -309,7 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const bar = document.getElementById('micVolumeBar');
 
     if (micTestStream) {
-      // Parar teste
       stopMicTest();
       if (btn) btn.textContent = 'Testar áudio';
       if (bar) bar.style.width = '0%';
@@ -339,7 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 80);
 
     } catch (e) {
-      console.warn('Erro ao testar microfone:', e);
       alert('Não foi possível acessar o microfone para teste. Verifique as permissões.');
       stopMicTest();
       if (btn) btn.textContent = 'Testar áudio';
@@ -501,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // EXPORTAÇÃO DO HISTÓRICO DA CHAMADA ATUAL
+  // EXPORTAÇÃO DO HISTÓRICO
   // ==========================================
   on('btnExportTxt', 'click', () => {
     if (state.transcriptHistory.length === 0) {
@@ -688,7 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
 
   async function requestUserMedia(wantVideo = true, facingMode = 'user') {
-    stopMicTest(); // Para o teste do lobby se estiver rodando
+    stopMicTest();
 
     if (wantVideo) {
       try {
@@ -715,7 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return audioStream;
     } catch (err) {
       console.error('Falha de microfone:', err);
-      alert('O navegador não autorizou o microfone. No computador ou celular, abra pelo link com HTTPS (GitHub Pages) para permitir.');
+      alert('O navegador não autorizou o microfone. Abra pelo link do GitHub Pages (com HTTPS) para liberar.');
       throw err;
     }
   }
@@ -737,7 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupCallUI(roomId) {
     state.roomId = roomId;
     
-    // ZERA O HISTÓRICO PARA ESTA NOVA CHAMADA (NÃO MISTURA COM OUTRAS!)
+    // Zera o histórico para esta nova chamada
     state.transcriptHistory = [];
     if (transcriptList) {
       transcriptList.innerHTML = '<div class="text-center py-8 text-slate-500"><p>Histórico iniciado para a sala: ' + escapeHtml(roomId) + '</p></div>';
@@ -751,7 +810,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (localUserAvatar) localUserAvatar.textContent = (state.userName[0] || 'V').toUpperCase();
     if (localLangBadge) localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
 
-    // Iniciar Temporizador da Chamada
     state.callStartTime = Date.now();
     clearInterval(state.timerInterval);
     state.timerInterval = setInterval(() => {
@@ -766,7 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // WEBRTC PEERJS (Conexão P2P)
+  // WEBRTC PEERJS
   // ==========================================
 
   const rtcConfig = {
@@ -816,7 +874,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isInitiator) {
           updateConnectionBadge('Aguardando colega...', 'connecting');
           if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Aguardando colega...';
-          if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Envie o link para o colega';
+          if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Envie o convite para o colega';
         } else {
           updateConnectionBadge('Conectando...', 'connecting');
           connectToPeer(roomId);
@@ -946,6 +1004,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else if (data.type === 'reaction') {
       triggerFloatingEmoji(data.emoji, false);
+    } else if (data.type === 'remote_tts') {
+      // O colega enviou texto sintetizado
+      speakText(data.translated, data.lang);
+      addTranscriptItem({
+        sender: data.sender + ' (Voz)',
+        isSelf: false,
+        original: data.text,
+        translated: data.translated,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+      showRemoteCaption(data.sender, data.text, data.translated);
     } else if (data.type === 'speech') {
       handleRemoteSpeech(data);
     } else if (data.type === 'chat') {
@@ -1076,7 +1145,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (src === tgt && src !== 'auto') return text;
 
-    // Gemini API
     if (state.engine === 'gemini' && state.geminiKey) {
       try {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.geminiKey}`;
@@ -1094,7 +1162,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
 
-    // MyMemory
     try {
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}`;
       const res = await fetch(url);
@@ -1104,7 +1171,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {}
 
-    // Fallback Google Client
     try {
       const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${src}&tl=${tgt}&dt=t&q=${encodeURIComponent(text)}`;
       const gRes = await fetch(gUrl);
@@ -1314,7 +1380,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.isVideoEnabled) {
       if (localVideo) localVideo.classList.remove('hidden');
       if (localAvatarBox) localAvatarBox.classList.add('hidden');
-      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
+      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
       if (iconCamera) iconCamera.setAttribute('data-lucide', 'video');
     } else {
       if (localVideo) localVideo.classList.add('hidden');
@@ -1412,7 +1478,6 @@ document.addEventListener('DOMContentLoaded', () => {
     stopRecording();
     clearInterval(state.timerInterval);
 
-    // SALVA A REUNIÃO ATUAL NO ARQUIVO PERSISTENTE ANTES DE SAIR
     const duration = callTimerDisplay ? callTimerDisplay.textContent : '00:00';
     saveCallToArchive(state.roomId, duration, state.transcriptHistory);
 

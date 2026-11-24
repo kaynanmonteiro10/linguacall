@@ -40,17 +40,17 @@
   </script>
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-x-hidden select-none">
+<body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col font-sans antialiased overflow-hidden select-none">
 
   <!-- Aviso de protocolo file:// -->
-  <div id="fileProtocolWarning" class="hidden bg-amber-500/20 border-b border-amber-500/40 px-3 py-1.5 text-xs text-amber-200 text-center flex items-center justify-center gap-2">
+  <div id="fileProtocolWarning" class="hidden bg-amber-500/20 border-b border-amber-500/40 px-3 py-1.5 text-xs text-amber-200 text-center flex items-center justify-center gap-2 z-50">
     <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 flex-shrink-0"></i>
     <span>Abra pelo link do GitHub Pages (com HTTPS) para liberar microfone e câmera no celular.</span>
   </div>
 
-  <!-- Cabeçalho Principal (Lobby) -->
-  <header id="mainHeader" class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+  <!-- Cabeçalho (Lobby) -->
+  <header id="mainHeader" class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md h-14 flex-shrink-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30">
           <i data-lucide="languages" class="w-4 h-4 text-white"></i>
@@ -62,7 +62,6 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <!-- Botão Abrir Histórico de Chamadas Passadas no Lobby -->
         <button id="btnOpenSavedCallsModal" class="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800/70 hover:bg-slate-800 text-xs text-slate-300 flex items-center gap-1.5 transition" title="Ver reuniões gravadas no navegador">
           <i data-lucide="archive" class="w-3.5 h-3.5 text-indigo-400"></i>
           <span class="hidden sm:inline">Reuniões Passadas</span>
@@ -80,11 +79,11 @@
     </div>
   </header>
 
-  <!-- Conteúdo Principal -->
-  <main class="flex-1 flex flex-col justify-center items-center relative overflow-hidden">
+  <!-- Área Principal -->
+  <main class="flex-1 w-full h-full relative overflow-hidden flex flex-col items-center justify-center min-h-0">
     
     <!-- TELA 1: LOBBY -->
-    <div id="lobbyScreen" class="w-full max-w-md p-4 sm:p-6 my-auto">
+    <div id="lobbyScreen" class="w-full max-w-md p-4 sm:p-6 my-auto overflow-y-auto">
       <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl">
         <div class="text-center mb-5">
           <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 mb-2 shadow-inner">
@@ -131,7 +130,7 @@
             </div>
           </div>
 
-          <!-- Testador e Medidor de Microfone no Lobby -->
+          <!-- Teste de Microfone -->
           <div class="p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
             <div class="flex items-center justify-between text-xs">
               <span class="text-slate-300 flex items-center gap-1.5">
@@ -140,7 +139,6 @@
               </span>
               <button id="btnTestMicLobby" class="text-[11px] text-indigo-400 hover:text-indigo-300">Testar áudio</button>
             </div>
-            <!-- Barra de volume de voz -->
             <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
               <div id="micVolumeBar" class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full w-0 transition-all duration-75"></div>
             </div>
@@ -180,22 +178,28 @@
       </div>
     </div>
 
-    <!-- TELA 2: SALA DE CHAMADA -->
-    <div id="callScreen" class="hidden w-full h-[100dvh] md:h-[calc(100vh-4rem)] md:max-w-7xl md:p-3 flex flex-col md:flex-row gap-2 relative bg-slate-950">
+    <!-- TELA 2: SALA DE CHAMADA (COMPUTADOR E MOBILE COM 100% DE VISIBILIDADE) -->
+    <div id="callScreen" class="hidden w-full h-full flex flex-col md:flex-row p-0 md:p-3 gap-2 bg-slate-950 relative overflow-hidden min-h-0">
       
-      <!-- Container das Reações Flutuantes (Emojis) -->
+      <!-- Reações de Emojis -->
       <div id="reactionOverlay" class="pointer-events-none absolute inset-0 z-50 overflow-hidden"></div>
 
-      <!-- Lado Principal: Área de Vídeo e Controles -->
-      <div class="flex-1 h-full flex flex-col bg-slate-950 md:bg-slate-900/60 md:border md:border-slate-800 md:rounded-2xl overflow-hidden relative shadow-2xl">
+      <!-- LADO ESQUERDO: ÁREA DE VÍDEOS E CONTROLES (COMPUTADOR & MOBILE) -->
+      <div class="flex-1 h-full flex flex-col bg-slate-950 md:bg-slate-900/70 md:border md:border-slate-800 md:rounded-2xl overflow-hidden relative shadow-2xl min-h-0">
         
         <!-- Barra Superior Dentro da Chamada -->
-        <div class="h-12 border-b border-slate-800/80 px-3 flex items-center justify-between bg-slate-950/80 backdrop-blur-md z-30">
+        <div class="h-12 border-b border-slate-800/80 px-3 flex items-center justify-between bg-slate-950/80 backdrop-blur-md flex-shrink-0 z-30">
           <div class="flex items-center gap-2 overflow-hidden">
             <!-- Temporizador -->
             <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-emerald-400 flex-shrink-0">
               <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span id="callTimerDisplay">00:00</span>
+            </div>
+
+            <!-- Indicador de Latência / Ping -->
+            <div class="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] text-slate-400 font-mono">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span id="pingDisplay">28ms</span>
             </div>
             
             <!-- Seletores Rápidos de Idioma -->
@@ -231,106 +235,127 @@
           </div>
 
           <div class="flex items-center gap-1">
-            <!-- Botão Estatísticas da Conversa -->
-            <button id="btnOpenStatsModal" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition" title="Estatísticas da conversa">
+            <!-- Controle de Volume Remoto -->
+            <div class="hidden lg:flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800 text-xs">
+              <i data-lucide="volume-2" class="w-3.5 h-3.5 text-slate-400"></i>
+              <input type="range" id="sliderRemoteVolume" min="0" max="100" value="100" class="w-16 h-1 bg-slate-700 rounded-lg cursor-pointer accent-indigo-500">
+            </div>
+
+            <!-- Botão Filtros de Câmera -->
+            <button id="btnCameraFilters" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition" title="Filtros de Vídeo">
+              <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+            </button>
+
+            <!-- Botão Estatísticas -->
+            <button id="btnOpenStatsModal" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition" title="Estatísticas">
               <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-400"></i>
             </button>
 
             <!-- Botão Gravar Reunião -->
-            <button id="btnRecordCall" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition" title="Gravar reunião localmente">
+            <button id="btnRecordCall" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition" title="Gravar reunião">
               <i data-lucide="disc" id="iconRecord" class="w-4 h-4"></i>
             </button>
 
+            <!-- Botão Tela Cheia -->
+            <button id="btnToggleFullscreen" class="hidden sm:inline-flex p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition" title="Tela Cheia">
+              <i data-lucide="maximize" class="w-4 h-4"></i>
+            </button>
+
             <!-- Botão Copiar Convite -->
-            <button id="btnCopyInvite" class="px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs flex items-center gap-1 transition" title="Copiar link de convite">
+            <button id="btnCopyInvite" class="px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs flex items-center gap-1 transition" title="Copiar convite">
               <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
               <span class="hidden sm:inline">Convidar</span>
             </button>
 
-            <!-- Botão Abrir Chat/Histórico no Mobile -->
-            <button id="btnToggleDrawerChat" class="md:hidden relative p-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700" title="Ver Histórico de Conversa">
+            <!-- Botão Abrir Chat no Mobile -->
+            <button id="btnToggleDrawerChat" class="md:hidden relative p-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700" title="Ver Histórico">
               <i data-lucide="message-square" class="w-4 h-4"></i>
               <span id="chatNotificationBadge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full"></span>
             </button>
           </div>
         </div>
 
-        <!-- Área de Vídeo -->
-        <div class="flex-1 relative w-full h-full bg-slate-950 overflow-hidden flex items-center justify-center">
+        <!-- ÁREA DOS VÍDEOS: GRADE DE 2 COLUNAS NO COMPUTADOR / PIP NO CELULAR -->
+        <div class="flex-1 w-full h-full relative overflow-hidden bg-slate-950 p-2 sm:p-3 min-h-0">
           
-          <!-- Card Colega Remoto -->
-          <div id="remoteContainer" class="w-full h-full relative flex items-center justify-center bg-slate-950">
-            <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover hidden"></video>
-
-            <div id="remoteAvatarBox" class="flex flex-col items-center justify-center relative p-6">
-              <div id="remoteAudioWave" class="hidden absolute w-32 h-32 rounded-full bg-emerald-500/20 animate-ripple"></div>
-              <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-700 to-teal-500 border-2 border-emerald-400 flex items-center justify-center text-white text-2xl font-bold shadow-2xl relative z-10">
-                <span id="remoteUserAvatar">?</span>
-              </div>
-              <p class="text-xs text-slate-400 mt-3 font-medium" id="remoteStatusIndicator">Aguardando colega entrar...</p>
-            </div>
+          <div class="w-full h-full grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 relative min-h-0">
             
-            <div class="absolute top-3 left-3 z-20 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800/80 flex items-center gap-1.5 text-xs">
-              <span id="remoteUserNameDisplay" class="font-medium text-white">Colega</span>
-              <span id="remoteLangBadge" class="text-[10px] px-1 rounded bg-emerald-950 text-emerald-300 font-mono">--</span>
-            </div>
+            <!-- CARD 1: COLEGA REMOTO (ESQUERDA NO COMPUTADOR / PRINCIPAL NO MOBILE) -->
+            <div id="remoteContainer" class="w-full h-full relative flex items-center justify-center bg-slate-950 border border-slate-800/80 rounded-2xl overflow-hidden min-h-0 shadow-xl">
+              
+              <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover hidden"></video>
 
-            <!-- BALÃO DE LEGENDA TRADUZIDA NA TELA -->
-            <div id="remoteLiveCaptionOverlay" class="hidden absolute bottom-24 md:bottom-8 left-3 right-3 z-30 pointer-events-none flex justify-center">
-              <div class="max-w-[94%] sm:max-w-[80%] bg-slate-950/95 border border-emerald-500/60 backdrop-blur-md px-4 py-3 rounded-2xl text-center shadow-2xl animate-fade-up">
-                <div class="text-[10px] uppercase font-bold text-emerald-400 flex items-center justify-center gap-1.5 mb-1">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span id="remoteLiveCaptionSpeaker">Tradução ao vivo</span>
+              <div id="remoteAvatarBox" class="flex flex-col items-center justify-center relative p-6">
+                <div id="remoteAudioWave" class="hidden absolute w-32 h-32 rounded-full bg-emerald-500/20 animate-ripple"></div>
+                <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-700 to-teal-500 border-2 border-emerald-400 flex items-center justify-center text-white text-2xl font-bold shadow-2xl relative z-10">
+                  <span id="remoteUserAvatar">?</span>
                 </div>
-                <div id="remoteLiveCaptionTranslated" class="text-base sm:text-lg font-bold text-emerald-200 leading-snug">
-                  ...
-                </div>
-                <div id="remoteLiveCaptionOriginal" class="text-xs text-slate-400 italic mt-1 line-clamp-1">
-                  ...
+                <p class="text-xs text-slate-400 mt-3 font-medium" id="remoteStatusIndicator">Aguardando colega entrar...</p>
+              </div>
+              
+              <div class="absolute top-3 left-3 z-20 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 flex items-center gap-1.5 text-xs">
+                <span id="remoteUserNameDisplay" class="font-medium text-white">Colega</span>
+                <span id="remoteLangBadge" class="text-[10px] px-1 rounded bg-emerald-950 text-emerald-300 font-mono">--</span>
+              </div>
+
+              <!-- BALÃO DE LEGENDA TRADUZIDA NA TELA DO COLEGA -->
+              <div id="remoteLiveCaptionOverlay" class="hidden absolute bottom-4 left-3 right-3 z-30 pointer-events-none flex justify-center">
+                <div class="max-w-[94%] bg-slate-950/95 border border-emerald-500/60 backdrop-blur-md px-4 py-3 rounded-2xl text-center shadow-2xl animate-fade-up">
+                  <div class="text-[10px] uppercase font-bold text-emerald-400 flex items-center justify-center gap-1.5 mb-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="remoteLiveCaptionSpeaker">Tradução ao vivo</span>
+                  </div>
+                  <div id="remoteLiveCaptionTranslated" class="text-base sm:text-lg font-bold text-emerald-200 leading-snug">
+                    ...
+                  </div>
+                  <div id="remoteLiveCaptionOriginal" class="text-xs text-slate-400 italic mt-1 line-clamp-1">
+                    ...
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Card Participante Local -->
-          <div id="localContainer" class="absolute top-3 right-3 z-20 w-32 h-44 sm:w-40 sm:h-52 md:relative md:top-auto md:right-auto md:w-auto md:h-full md:flex-1 bg-slate-900 border-2 border-indigo-500/50 rounded-2xl overflow-hidden shadow-2xl flex flex-col items-center justify-center transition-all group">
-            
-            <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100 hidden"></video>
-            <video id="localSecondVideo" autoplay playsinline muted class="w-full h-1/2 object-cover border-t border-indigo-500/40 hidden"></video>
+            <!-- CARD 2: PARTICIPANTE LOCAL (DIREITA NO COMPUTADOR / FLUTUANTE NO MOBILE) -->
+            <div id="localContainer" class="w-full h-full relative flex items-center justify-center bg-slate-950 border border-slate-800/80 rounded-2xl overflow-hidden min-h-0 shadow-xl">
+              
+              <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100 hidden"></video>
+              <video id="localSecondVideo" autoplay playsinline muted class="w-full h-1/2 object-cover border-t border-indigo-500/40 hidden"></video>
 
-            <div id="localAvatarBox" class="flex flex-col items-center justify-center relative p-2">
-              <div id="localAudioWave" class="hidden absolute w-16 h-16 rounded-full bg-indigo-500/20 animate-ripple"></div>
-              <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-700 to-indigo-500 border border-indigo-400 flex items-center justify-center text-white text-base font-bold shadow-xl relative z-10">
-                <span id="localUserAvatar">V</span>
+              <div id="localAvatarBox" class="flex flex-col items-center justify-center relative p-4">
+                <div id="localAudioWave" class="hidden absolute w-24 h-24 rounded-full bg-indigo-500/20 animate-ripple"></div>
+                <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-700 to-indigo-500 border border-indigo-400 flex items-center justify-center text-white text-xl font-bold shadow-xl relative z-10">
+                  <span id="localUserAvatar">V</span>
+                </div>
+              </div>
+              
+              <!-- Controles do Card Local -->
+              <div class="absolute top-2.5 right-2.5 z-30 flex items-center gap-1 bg-black/60 backdrop-blur-md rounded-lg p-0.5 border border-slate-800">
+                <button id="btnMirrorLocalVideo" class="p-1 rounded text-slate-300 hover:text-white transition" title="Espelhar Câmera">
+                  <i data-lucide="flip-horizontal" class="w-3.5 h-3.5"></i>
+                </button>
+                <button id="btnToggleDualCamera" class="p-1 rounded text-slate-300 hover:text-white transition" title="Câmera Dupla">
+                  <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+
+              <div class="absolute bottom-2.5 left-2.5 z-20 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg text-xs flex items-center gap-1.5 text-white border border-slate-800">
+                <span id="localUserNameDisplay" class="font-medium">Você</span>
+                <span id="localLangBadge" class="text-[9px] px-1 rounded bg-indigo-950 text-indigo-300 font-mono">pt-BR</span>
+              </div>
+
+              <div id="localLiveCaptionOverlay" class="hidden absolute bottom-4 left-3 right-3 z-30 pointer-events-none flex justify-center">
+                <div class="max-w-[90%] bg-indigo-950/95 border border-indigo-500/60 p-2 rounded-xl text-center text-xs text-white shadow-xl truncate">
+                  <span id="localLiveCaptionText">Falando...</span>
+                </div>
               </div>
             </div>
-            
-            <!-- Controles do Card Local -->
-            <div class="absolute top-1.5 right-1.5 z-30 flex items-center gap-1 bg-black/60 backdrop-blur-md rounded-lg p-0.5 border border-slate-800">
-              <button id="btnMirrorLocalVideo" class="p-1 rounded text-slate-300 hover:text-white transition" title="Espelhar Câmera">
-                <i data-lucide="flip-horizontal" class="w-3.5 h-3.5"></i>
-              </button>
-              <button id="btnToggleDualCamera" class="p-1 rounded text-slate-300 hover:text-white transition" title="Câmera Dupla">
-                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
-              </button>
-            </div>
 
-            <div class="absolute bottom-1.5 left-1.5 right-1.5 z-20 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] flex items-center justify-between text-white">
-              <span id="localUserNameDisplay" class="truncate">Você</span>
-              <span id="localLangBadge" class="text-[9px] px-1 rounded bg-indigo-950 text-indigo-300 font-mono">pt-BR</span>
-            </div>
-
-            <div id="localLiveCaptionOverlay" class="hidden absolute inset-x-1 top-1 z-30 pointer-events-none">
-              <div class="bg-indigo-950/90 border border-indigo-500/60 p-1.5 rounded-lg text-center text-[10px] text-white truncate">
-                <span id="localLiveCaptionText">Falando...</span>
-              </div>
-            </div>
           </div>
 
         </div>
 
         <!-- BARRA RÁPIDA DE REAÇÕES (EMOJIS) -->
-        <div class="h-8 bg-slate-950/80 border-t border-slate-800/60 px-4 flex items-center justify-center gap-4 text-sm z-30">
+        <div class="h-8 bg-slate-950/90 border-t border-slate-800/60 px-4 flex items-center justify-center gap-4 text-sm flex-shrink-0 z-30">
           <button class="btnReaction hover:scale-125 transition" data-emoji="👏">👏</button>
           <button class="btnReaction hover:scale-125 transition" data-emoji="👍">👍</button>
           <button class="btnReaction hover:scale-125 transition" data-emoji="❤️">❤️</button>
@@ -340,7 +365,7 @@
         </div>
 
         <!-- BARRA DE CONTROLES INFERIOR -->
-        <div class="h-16 border-t border-slate-800 bg-slate-950 px-3 sm:px-6 flex items-center justify-between z-30">
+        <div class="h-16 border-t border-slate-800 bg-slate-950 px-3 sm:px-6 flex items-center justify-between flex-shrink-0 z-30">
           <div class="flex items-center gap-1.5 sm:gap-2.5">
             <button id="btnToggleMic" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Microfone">
               <i data-lucide="mic" id="iconMic" class="w-5 h-5 text-white"></i>
@@ -354,7 +379,7 @@
               <i data-lucide="switch-camera" class="w-5 h-5"></i>
             </button>
 
-            <button id="btnShareScreen" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center border border-slate-700 transition active:scale-95 hidden sm:flex" title="Compartilhar Tela">
+            <button id="btnShareScreen" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Compartilhar Tela">
               <i data-lucide="monitor-up" class="w-5 h-5"></i>
             </button>
 
@@ -364,7 +389,7 @@
           </div>
 
           <div>
-            <button id="btnEndCall" class="px-4 sm:px-5 py-2.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-rose-600/30 transition active:scale-95">
+            <button id="btnEndCall" class="px-5 py-2.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-rose-600/30 transition active:scale-95">
               <i data-lucide="phone-off" class="w-4 h-4"></i>
               <span>Sair</span>
             </button>
@@ -373,10 +398,10 @@
 
       </div>
 
-      <!-- Lado Direito: Histórico Exclusivo da Sala Atual -->
-      <div id="chatDrawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-84 bg-slate-900 border-l border-slate-800 flex flex-col transform translate-x-full md:translate-x-0 md:relative md:inset-auto md:w-84 md:h-full md:rounded-2xl md:border transition-transform duration-300 shadow-2xl">
+      <!-- LADO DIREITO: HISTÓRICO DE CHAT COM EXPORTAÇÃO (FIXO NO DESKTOP, GAVETA NO CELULAR) -->
+      <div id="chatDrawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-84 md:w-80 lg:w-88 bg-slate-900 border-l border-slate-800 flex flex-col transform translate-x-full md:translate-x-0 md:relative md:inset-auto md:h-full md:rounded-2xl md:border transition-transform duration-300 shadow-2xl flex-shrink-0 min-h-0">
         
-        <div class="p-3 border-b border-slate-800 bg-slate-950/80">
+        <div class="p-3 border-b border-slate-800 bg-slate-950/80 flex-shrink-0">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
               <i data-lucide="message-square-text" class="w-4 h-4 text-indigo-400"></i>
@@ -387,7 +412,6 @@
             </button>
           </div>
 
-          <!-- Ações de Exportação Imediata -->
           <div class="grid grid-cols-3 gap-1.5 text-[11px]">
             <button id="btnExportTxt" class="py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1 transition" title="Baixar TXT">
               <i data-lucide="file-text" class="w-3 h-3 text-indigo-400"></i>
@@ -404,17 +428,24 @@
           </div>
         </div>
 
-        <div id="transcriptList" class="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs scroll-smooth">
+        <div id="transcriptList" class="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs scroll-smooth min-h-0">
           <div class="text-center py-8 text-slate-500">
             <i data-lucide="sparkles" class="w-6 h-6 mx-auto mb-1.5 opacity-40"></i>
             <p>Tudo o que for conversado e traduzido nesta chamada ficará gravado aqui.</p>
           </div>
         </div>
 
-        <div class="p-2.5 border-t border-slate-800 bg-slate-950/80 flex gap-1.5">
-          <input type="text" id="inputChatFallback" placeholder="Escreva uma mensagem..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
-          <button id="btnSendChat" class="px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl flex items-center justify-center transition">
-            <i data-lucide="send" class="w-4 h-4"></i>
+        <!-- Chat Fallback com Botão de Falar Tradução (Push-to-Talk Synthesizer) -->
+        <div class="p-2.5 border-t border-slate-800 bg-slate-950/80 flex flex-col gap-1.5 flex-shrink-0">
+          <div class="flex gap-1.5">
+            <input type="text" id="inputChatFallback" placeholder="Escreva uma mensagem..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <button id="btnSendChat" class="px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl flex items-center justify-center transition" title="Enviar no chat">
+              <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <button id="btnSpeakMyText" class="w-full py-1 text-[11px] rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700 flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="volume-2" class="w-3.5 h-3.5 text-indigo-400"></i>
+            <span>Falar meu texto traduzido para o colega</span>
           </button>
         </div>
       </div>
@@ -423,7 +454,7 @@
 
   </main>
 
-  <!-- MODAL: HISTÓRICO DE REUNIÕES PASSADAS (ARQUIVO PERSISTENTE) -->
+  <!-- MODAL: REUNIÕES PASSADAS -->
   <div id="savedCallsModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col p-5 shadow-2xl">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -436,10 +467,7 @@
         </button>
       </div>
 
-      <!-- Lista de Chamadas Anteriores -->
-      <div id="savedCallsList" class="flex-1 overflow-y-auto py-3 space-y-2.5 text-xs">
-        <!-- Inserido dinamicamente via JS -->
-      </div>
+      <div id="savedCallsList" class="flex-1 overflow-y-auto py-3 space-y-2.5 text-xs"></div>
 
       <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
         <button id="btnClearAllSavedCalls" class="text-rose-400 hover:text-rose-300 transition">Limpar todo o arquivo</button>
@@ -448,7 +476,7 @@
     </div>
   </div>
 
-  <!-- MODAL: VISUALIZAR CONVERSA DE UMA REUNIÃO PASSADA ESPECÍFICA -->
+  <!-- MODAL: VISUALIZAR CONVERSA PASSADA -->
   <div id="viewSpecificCallModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col p-5 shadow-2xl">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -473,7 +501,7 @@
     </div>
   </div>
 
-  <!-- MODAL: ESTATÍSTICAS DA CONVERSA (ANALYTICS) -->
+  <!-- MODAL: ESTATÍSTICAS DA CONVERSA -->
   <div id="statsModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 shadow-2xl">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -498,8 +526,8 @@
         <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
           <span class="text-slate-400 block">Distribuição da Conversa:</span>
           <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
-            <div id="statsLocalBar" class="bg-indigo-500 h-full w-1/2" title="Você"></div>
-            <div id="statsRemoteBar" class="bg-emerald-500 h-full w-1/2" title="Colega"></div>
+            <div id="statsLocalBar" class="bg-indigo-500 h-full w-1/2"></div>
+            <div id="statsRemoteBar" class="bg-emerald-500 h-full w-1/2"></div>
           </div>
           <div class="flex justify-between text-[10px] text-slate-400">
             <span id="statsLocalPercent">Você: 50%</span>
@@ -510,6 +538,36 @@
 
       <div class="pt-2 border-t border-slate-800 flex justify-end">
         <button id="btnCloseStatsModalBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition text-xs">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FILTROS DE CÂMERA -->
+  <div id="filtersModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xs w-full p-5 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+          Filtros de Vídeo
+        </h3>
+        <button id="btnCloseFiltersModal" class="text-slate-400 hover:text-white transition p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="py-3 grid grid-cols-2 gap-2 text-xs">
+        <button class="btnApplyFilter p-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white transition text-center" data-filter="none">
+          Normal
+        </button>
+        <button class="btnApplyFilter p-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white transition text-center" data-filter="contrast(1.2) brightness(1.1)">
+          Nitidez / Brilho
+        </button>
+        <button class="btnApplyFilter p-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white transition text-center" data-filter="sepia(0.3) saturate(1.2)">
+          Cinema / Warm
+        </button>
+        <button class="btnApplyFilter p-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white transition text-center" data-filter="grayscale(1)">
+          P&B Studio
+        </button>
       </div>
     </div>
   </div>
