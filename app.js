@@ -166,7 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
     remoteStream: null,
     screenStream: null,
     roomId: null,
-    roomPin: '',
     isInitiator: false,
     isReconnecting: false,
     reconnectAttempts: 0,
@@ -1397,7 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (callTimerDisplay) callTimerDisplay.textContent = `${mins}:${secs}`;
     }, 1000);
 
-    const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}${state.roomPin ? '&pin=' + encodeURIComponent(state.roomPin) : ''}`;
+    const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
     const inviteInput = document.getElementById('inviteLinkInput');
     if (inviteInput) inviteInput.value = newUrl;
@@ -1418,9 +1417,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on('btnCreateRoom', 'click', async () => {
     state.isInitiator = true;
-    state.roomPin = (document.getElementById('inputRoomPin')?.value || '').trim();
-    if (state.roomPin) localStorage.setItem('lc_room_pin', state.roomPin);
-    else localStorage.removeItem('lc_room_pin');
     const roomId = generateRoomId();
     await startCallFlow(roomId);
   });
@@ -1434,9 +1430,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (code.includes('?room=')) {
       code = code.split('?room=')[1].split('&')[0];
     }
-    const pinFromInput = (document.getElementById('inputRoomPin')?.value || '').trim();
-    const pinFromUrl = new URLSearchParams(window.location.search).get('pin') || '';
-    state.roomPin = pinFromInput || pinFromUrl || localStorage.getItem('lc_room_pin') || '';
     state.isInitiator = false;
     await startCallFlow(code);
   });
@@ -1633,10 +1626,6 @@ document.addEventListener('DOMContentLoaded', () => {
         speakLang: state.speakLang,
         hasVideo: state.isVideoEnabled
       });
-      // Quem entra na sala envia o PIN; o anfitrião confere
-      if (!state.isInitiator) {
-        sendData({ type: 'pin_check', pin: state.roomPin || '' });
-      }
     });
 
     conn.on('data', async (data) => {
@@ -1766,28 +1755,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- "Está digitando..." ----
     if (data.type === 'typing') {
       showTypingIndicator(!!data.isTyping, data.userName);
-      return;
-    }
-
-    // ---- Verificação de PIN da sala ----
-    if (data.type === 'pin_check') {
-      const ok = !state.roomPin || (data.pin || '') === state.roomPin;
-      sendData({ type: 'pin_result', ok: ok });
-      if (!ok) {
-        // Encerra a conexão com quem não sabe a senha da sala
-        setTimeout(() => {
-          try { state.dataConnection?.close(); } catch(e) {}
-        }, 300);
-      }
-      return;
-    }
-
-    if (data.type === 'pin_result') {
-      if (!data.ok) {
-        showNotification('PIN incorreto. Você não pode entrar nesta sala.');
-        alert('PIN incorreto! Peça a senha correta para quem criou a sala.');
-        cleanupAndExitCall(true);
-      }
       return;
     }
 
@@ -3209,12 +3176,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function buildInviteUrl() {
-    return `${window.location.origin}${window.location.pathname}?room=${state.roomId}${state.roomPin ? '&pin=' + encodeURIComponent(state.roomPin) : ''}`;
+    return `${window.location.origin}${window.location.pathname}?room=${state.roomId}`;
   }
 
   function shareInvite() {
     const inviteUrl = buildInviteUrl();
-    const text = `Entre na minha chamada no LinguaCall: ${inviteUrl}${state.roomPin ? ' (PIN: ' + state.roomPin + ')' : ''}`;
+    const text = `Entre na minha chamada no LinguaCall: ${inviteUrl}`;
     // 1) Compartilhar nativo (celular): abre WhatsApp, Telegram etc.
     if (navigator.share) {
       navigator.share({ title: 'LinguaCall', text: text, url: inviteUrl })
@@ -3227,7 +3194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function copyInvite(inviteUrl) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(inviteUrl).then(() => {
-        showNotification(state.roomPin ? 'Link com PIN copiado!' : 'Link copiado!');
+        showNotification('Link copiado!');
       }).catch(() => { prompt('Copie o link:', inviteUrl); });
     } else {
       prompt('Copie o link:', inviteUrl);
