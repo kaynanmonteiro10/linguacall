@@ -1,6 +1,5 @@
-/* Custom Styles LinguaCall */
+/* Custom Styles LinguaCall Pro */
 
-/* Otimização para visualização em telas de toque (Mobile) */
 html, body {
   height: 100%;
   overscroll-behavior-y: none;
@@ -26,18 +25,9 @@ html, body {
 }
 
 @keyframes audioPulse {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.3);
-    opacity: 0.3;
-  }
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 0.3; }
+  100% { transform: scale(1.6); opacity: 0; }
 }
 
 .speaking-pulse {
@@ -45,16 +35,29 @@ html, body {
 }
 
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-up {
   animation: fadeUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-80px) scale(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-160px) scale(1.6);
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 2.4s ease-out forwards;
 }

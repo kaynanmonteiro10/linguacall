@@ -17,6 +17,7 @@
           animation: {
             'ripple': 'ripple 1.5s linear infinite',
             'fade-up': 'fadeUp 0.25s ease-out forwards',
+            'float-up': 'floatUp 2.5s ease-out forwards',
           },
           keyframes: {
             ripple: {
@@ -26,6 +27,10 @@
             fadeUp: {
               '0%': { opacity: '0', transform: 'translateY(10px)' },
               '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            floatUp: {
+              '0%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+              '100%': { opacity: '0', transform: 'translateY(-140px) scale(1.6)' },
             }
           }
         }
@@ -36,13 +41,13 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-x-hidden select-none">
 
-  <!-- Aviso de protocolo file:// se aberto direto do disco -->
+  <!-- Aviso de protocolo file:// -->
   <div id="fileProtocolWarning" class="hidden bg-amber-500/20 border-b border-amber-500/40 px-3 py-1.5 text-xs text-amber-200 text-center flex items-center justify-center gap-2">
     <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 flex-shrink-0"></i>
-    <span>Você abriu direto do computador. Use o link do GitHub Pages (com HTTPS) para liberar microfone e câmera no celular.</span>
+    <span>Abra pelo link do GitHub Pages (com HTTPS) para liberar microfone e câmera no celular.</span>
   </div>
 
-  <!-- Cabeçalho (Fixo no Lobby, recolhido na chamada para dar 100% de tela no mobile) -->
+  <!-- Cabeçalho (Lobby) -->
   <header id="mainHeader" class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
       <div class="flex items-center gap-2.5">
@@ -50,8 +55,8 @@
           <i data-lucide="languages" class="w-4 h-4 text-white"></i>
         </div>
         <div>
-          <h1 class="font-bold text-sm leading-tight text-white">LinguaCall</h1>
-          <p class="text-[10px] text-slate-400">Tradução ao vivo para chamadas</p>
+          <h1 class="font-bold text-sm leading-tight text-white">LinguaCall Pro</h1>
+          <p class="text-[10px] text-slate-400">Chamadas Globais com IA em Tempo Real</p>
         </div>
       </div>
 
@@ -68,7 +73,7 @@
     </div>
   </header>
 
-  <!-- Conteúdo Principal -->
+  <!-- Área Principal -->
   <main class="flex-1 flex flex-col justify-center items-center relative overflow-hidden">
     
     <!-- TELA 1: LOBBY -->
@@ -79,7 +84,7 @@
             <i data-lucide="video" class="w-6 h-6"></i>
           </div>
           <h2 class="text-lg font-bold text-white">Iniciar Ligação</h2>
-          <p class="text-xs text-slate-400 mt-0.5">Converse com tradução instantânea na tela.</p>
+          <p class="text-xs text-slate-400 mt-0.5">Tradução ao vivo e recursos de câmera dupla.</p>
         </div>
 
         <div class="space-y-3.5">
@@ -153,19 +158,26 @@
       </div>
     </div>
 
-    <!-- TELA 2: SALA DE CHAMADA (LAYOUT MOBILE-FIRST OTIMIZADO) -->
+    <!-- TELA 2: SALA DE CHAMADA -->
     <div id="callScreen" class="hidden w-full h-[100dvh] md:h-[calc(100vh-4rem)] md:max-w-7xl md:p-3 flex flex-col md:flex-row gap-2 relative bg-slate-950">
       
-      <!-- Lado Principal: Área de Vídeo com Foco no Colega e PiP para você -->
+      <!-- Container das Reações Flutuantes (Emojis) -->
+      <div id="reactionOverlay" class="pointer-events-none absolute inset-0 z-50 overflow-hidden"></div>
+
+      <!-- Lado Principal: Área de Vídeo e Controles -->
       <div class="flex-1 h-full flex flex-col bg-slate-950 md:bg-slate-900/60 md:border md:border-slate-800 md:rounded-2xl overflow-hidden relative shadow-2xl">
         
-        <!-- Barra Superior Dentro da Chamada (Troca de Idiomas em Tempo Real sem Sair da Call) -->
+        <!-- Barra Superior Dentro da Chamada -->
         <div class="h-12 border-b border-slate-800/80 px-3 flex items-center justify-between bg-slate-950/80 backdrop-blur-md z-30">
           <div class="flex items-center gap-2 overflow-hidden">
-            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></span>
+            <!-- Temporizador de Duração da Chamada -->
+            <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-emerald-400 flex-shrink-0">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span id="callTimerDisplay">00:00</span>
+            </div>
             
-            <!-- Seletores de Idiomas RÁPIDOS DURANTE A CHAMADA -->
-            <div class="flex items-center gap-1.5 text-[11px] bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
+            <!-- Seletores Rápidos de Idioma -->
+            <div class="flex items-center gap-1 text-[11px] bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
               <span class="text-slate-400 hidden xs:inline">Falo:</span>
               <select id="inCallSpeakLang" class="bg-transparent text-indigo-300 font-medium focus:outline-none cursor-pointer">
                 <option value="pt-BR">🇧🇷 PT</option>
@@ -196,9 +208,14 @@
             </div>
           </div>
 
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1">
+            <!-- Botão Gravar Reunião -->
+            <button id="btnRecordCall" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition" title="Gravar reunião localmente">
+              <i data-lucide="disc" id="iconRecord" class="w-4 h-4"></i>
+            </button>
+
             <!-- Botão Copiar Convite -->
-            <button id="btnCopyInvite" class="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs flex items-center gap-1 transition" title="Copiar link de convite">
+            <button id="btnCopyInvite" class="px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs flex items-center gap-1 transition" title="Copiar link de convite">
               <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
               <span class="hidden sm:inline">Convidar</span>
             </button>
@@ -211,12 +228,11 @@
           </div>
         </div>
 
-        <!-- Área de Exibição de Vídeo (Foco Grande no Colega com PiP do Usuário no Mobile) -->
+        <!-- Área de Vídeo -->
         <div class="flex-1 relative w-full h-full bg-slate-950 overflow-hidden flex items-center justify-center">
           
-          <!-- Card Participante Remoto (Colega de outro país - OCUPA A TELA PRINCIPAL NO MOBILE) -->
+          <!-- Card Colega Remoto -->
           <div id="remoteContainer" class="w-full h-full relative flex items-center justify-center bg-slate-950">
-            
             <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover hidden"></video>
 
             <div id="remoteAvatarBox" class="flex flex-col items-center justify-center relative p-6">
@@ -227,37 +243,38 @@
               <p class="text-xs text-slate-400 mt-3 font-medium" id="remoteStatusIndicator">Aguardando colega entrar...</p>
             </div>
             
-            <!-- Nome do Colega no topo esquerdo do vídeo -->
             <div class="absolute top-3 left-3 z-20 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800/80 flex items-center gap-1.5 text-xs">
               <span id="remoteUserNameDisplay" class="font-medium text-white">Colega</span>
               <span id="remoteLangBadge" class="text-[10px] px-1 rounded bg-emerald-950 text-emerald-300 font-mono">--</span>
             </div>
 
-            <!-- BALÃO DE LEGENDA TRADUZIDA EM TEMPO REAL NA TELA (TOTALMENTE VISÍVEL NO MOBILE) -->
-            <div id="remoteLiveCaptionOverlay" class="hidden absolute bottom-20 md:bottom-6 left-3 right-3 z-30 pointer-events-none flex justify-center">
-              <div class="max-w-[94%] sm:max-w-[80%] bg-slate-950/90 border border-emerald-500/50 backdrop-blur-md px-4 py-3 rounded-2xl text-center shadow-2xl animate-fade-up">
+            <!-- BALÃO DE LEGENDA TRADUZIDA NA TELA -->
+            <div id="remoteLiveCaptionOverlay" class="hidden absolute bottom-24 md:bottom-8 left-3 right-3 z-30 pointer-events-none flex justify-center">
+              <div class="max-w-[94%] sm:max-w-[80%] bg-slate-950/95 border border-emerald-500/60 backdrop-blur-md px-4 py-3 rounded-2xl text-center shadow-2xl animate-fade-up">
                 <div class="text-[10px] uppercase font-bold text-emerald-400 flex items-center justify-center gap-1.5 mb-1">
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                   <span id="remoteLiveCaptionSpeaker">Tradução ao vivo</span>
                 </div>
-                <!-- Frase traduzida nítida -->
                 <div id="remoteLiveCaptionTranslated" class="text-base sm:text-lg font-bold text-emerald-200 leading-snug">
                   ...
                 </div>
-                <!-- Frase original para conferência -->
                 <div id="remoteLiveCaptionOriginal" class="text-xs text-slate-400 italic mt-1 line-clamp-1">
                   ...
                 </div>
               </div>
             </div>
-
           </div>
 
-          <!-- Card Participante Local (Você - Picture-in-Picture Flutuante no Mobile) -->
-          <div id="localContainer" class="absolute top-3 right-3 z-20 w-28 h-40 sm:w-36 sm:h-48 md:relative md:top-auto md:right-auto md:w-auto md:h-full md:flex-1 bg-slate-900 border-2 border-indigo-500/50 rounded-2xl overflow-hidden shadow-2xl flex flex-col items-center justify-center transition-all">
+          <!-- Card Participante Local (Com suporte a Vídeo Principal e Segunda Câmera / Dual Camera) -->
+          <div id="localContainer" class="absolute top-3 right-3 z-20 w-32 h-44 sm:w-40 sm:h-52 md:relative md:top-auto md:right-auto md:w-auto md:h-full md:flex-1 bg-slate-900 border-2 border-indigo-500/50 rounded-2xl overflow-hidden shadow-2xl flex flex-col items-center justify-center transition-all group">
             
+            <!-- Vídeo 1 (Frontal normal) -->
             <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100 hidden"></video>
 
+            <!-- Vídeo 2 (Câmera Traseira Simultânea se ativada no modo Dual Camera) -->
+            <video id="localSecondVideo" autoplay playsinline muted class="w-full h-1/2 object-cover border-t border-indigo-500/40 hidden"></video>
+
+            <!-- Fallback Avatar -->
             <div id="localAvatarBox" class="flex flex-col items-center justify-center relative p-2">
               <div id="localAudioWave" class="hidden absolute w-16 h-16 rounded-full bg-indigo-500/20 animate-ripple"></div>
               <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-700 to-indigo-500 border border-indigo-400 flex items-center justify-center text-white text-base font-bold shadow-xl relative z-10">
@@ -265,12 +282,24 @@
               </div>
             </div>
             
+            <!-- Controles Flutuantes do Card Local (Espelhar + Dual Camera) -->
+            <div class="absolute top-1.5 right-1.5 z-30 flex items-center gap-1 bg-black/60 backdrop-blur-md rounded-lg p-0.5 border border-slate-800">
+              <!-- Botão Espelhar Câmera (Corrige rosto torto / espelhamento) -->
+              <button id="btnMirrorLocalVideo" class="p-1 rounded text-slate-300 hover:text-white transition" title="Alternar Espelhamento da Câmera (Mirror)">
+                <i data-lucide="flip-horizontal" class="w-3.5 h-3.5"></i>
+              </button>
+              <!-- Botão Dual Camera (Frontal + Traseira simultâneas) -->
+              <button id="btnToggleDualCamera" class="p-1 rounded text-slate-300 hover:text-white transition" title="Ativar Câmera Dupla (Frontal e Traseira juntas)">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+
             <div class="absolute bottom-1.5 left-1.5 right-1.5 z-20 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] flex items-center justify-between text-white">
               <span id="localUserNameDisplay" class="truncate">Você</span>
               <span id="localLangBadge" class="text-[9px] px-1 rounded bg-indigo-950 text-indigo-300 font-mono">pt-BR</span>
             </div>
 
-            <!-- Balão quando você está falando (temporário) -->
+            <!-- Balão local -->
             <div id="localLiveCaptionOverlay" class="hidden absolute inset-x-1 top-1 z-30 pointer-events-none">
               <div class="bg-indigo-950/90 border border-indigo-500/60 p-1.5 rounded-lg text-center text-[10px] text-white truncate">
                 <span id="localLiveCaptionText">Falando...</span>
@@ -280,31 +309,41 @@
 
         </div>
 
-        <!-- BARRA DE CONTROLES INFERIOR (COMPLETA E RESPONSIVA) -->
-        <div class="h-16 border-t border-slate-800 bg-slate-950/95 px-3 sm:px-6 flex items-center justify-between z-30">
+        <!-- BARRA RÁPIDA DE REAÇÕES (EMOJIS) -->
+        <div class="h-8 bg-slate-950/80 border-t border-slate-800/60 px-4 flex items-center justify-center gap-4 text-sm z-30">
+          <button class="btnReaction hover:scale-125 transition" data-emoji="👏">👏</button>
+          <button class="btnReaction hover:scale-125 transition" data-emoji="👍">👍</button>
+          <button class="btnReaction hover:scale-125 transition" data-emoji="❤️">❤️</button>
+          <button class="btnReaction hover:scale-125 transition" data-emoji="😂">😂</button>
+          <button class="btnReaction hover:scale-125 transition" data-emoji="🎉">🎉</button>
+          <button class="btnReaction hover:scale-125 transition" data-emoji="🔥">🔥</button>
+        </div>
+
+        <!-- BARRA DE CONTROLES INFERIOR -->
+        <div class="h-16 border-t border-slate-800 bg-slate-950 px-3 sm:px-6 flex items-center justify-between z-30">
           <div class="flex items-center gap-1.5 sm:gap-2.5">
             <!-- Microfone -->
-            <button id="btnToggleMic" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Ligar/Desligar Microfone">
+            <button id="btnToggleMic" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Microfone">
               <i data-lucide="mic" id="iconMic" class="w-5 h-5 text-white"></i>
             </button>
 
             <!-- Câmera -->
-            <button id="btnToggleCamera" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Ligar/Desligar Câmera">
+            <button id="btnToggleCamera" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Câmera">
               <i data-lucide="video" id="iconCamera" class="w-5 h-5 text-white"></i>
             </button>
 
-            <!-- Virar Câmera (Frontal / Traseira no celular) -->
-            <button id="btnFlipCamera" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Alternar Câmera Frontal/Traseira">
+            <!-- Alternar Câmera Frontal / Traseira -->
+            <button id="btnFlipCamera" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Virar Câmera">
               <i data-lucide="switch-camera" class="w-5 h-5"></i>
             </button>
 
-            <!-- Compartilhar Tela (Desktop / Mobile moderno) -->
+            <!-- Compartilhar Tela -->
             <button id="btnShareScreen" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center border border-slate-700 transition active:scale-95 hidden sm:flex" title="Compartilhar Tela">
               <i data-lucide="monitor-up" class="w-5 h-5"></i>
             </button>
 
-            <!-- Voz Sintetizada (Ouvir Tradução) -->
-            <button id="btnToggleTTS" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Ouvir tradução em voz alta (TTS)">
+            <!-- Voz Sintetizada (TTS) -->
+            <button id="btnToggleTTS" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Ouvir Tradução por Voz">
               <i data-lucide="volume-2" id="iconTTS" class="w-5 h-5"></i>
             </button>
           </div>
@@ -320,31 +359,47 @@
 
       </div>
 
-      <!-- Lado Direito: Histórico da Transcrição (Drawer deslizante no mobile / Lateral no Desktop) -->
-      <div id="chatDrawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-80 bg-slate-900 border-l border-slate-800 flex flex-col transform translate-x-full md:translate-x-0 md:relative md:inset-auto md:w-80 md:h-full md:rounded-2xl md:border transition-transform duration-300 shadow-2xl">
-        <div class="h-12 border-b border-slate-800 px-4 flex items-center justify-between bg-slate-950/70">
-          <div class="flex items-center gap-2">
-            <i data-lucide="message-square-text" class="w-4 h-4 text-indigo-400"></i>
-            <span class="text-xs font-semibold text-slate-200 uppercase tracking-wider">Histórico</span>
-          </div>
-          
-          <div class="flex items-center gap-1">
-            <button id="btnExportTranscript" class="text-slate-400 hover:text-white transition p-1.5 rounded-lg hover:bg-slate-800" title="Baixar histórico em .txt">
-              <i data-lucide="download" class="w-4 h-4"></i>
-            </button>
-            <button id="btnCloseChatDrawer" class="md:hidden text-slate-400 hover:text-white transition p-1.5 rounded-lg hover:bg-slate-800">
+      <!-- Lado Direito: Histórico com Exportação Completa -->
+      <div id="chatDrawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-84 bg-slate-900 border-l border-slate-800 flex flex-col transform translate-x-full md:translate-x-0 md:relative md:inset-auto md:w-84 md:h-full md:rounded-2xl md:border transition-transform duration-300 shadow-2xl">
+        
+        <!-- Cabeçalho do Histórico com Estatísticas e Botões de Exportação -->
+        <div class="p-3 border-b border-slate-800 bg-slate-950/80">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <i data-lucide="message-square-text" class="w-4 h-4 text-indigo-400"></i>
+              <span class="text-xs font-bold text-slate-200 uppercase tracking-wider">Histórico da Reunião</span>
+            </div>
+            <button id="btnCloseChatDrawer" class="md:hidden text-slate-400 hover:text-white p-1">
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
           </div>
-        </div>
 
-        <div id="transcriptList" class="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs scroll-smooth">
-          <div class="text-center py-8 text-slate-500">
-            <i data-lucide="sparkles" class="w-6 h-6 mx-auto mb-1.5 opacity-40"></i>
-            <p>O histórico de tudo o que for falado e traduzido ficará gravado aqui.</p>
+          <!-- Barra de Ações de Exportação -->
+          <div class="grid grid-cols-3 gap-1.5 text-[11px]">
+            <button id="btnExportTxt" class="py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1 transition" title="Baixar TXT">
+              <i data-lucide="file-text" class="w-3 h-3 text-indigo-400"></i>
+              <span>TXT</span>
+            </button>
+            <button id="btnExportCsv" class="py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1 transition" title="Baixar CSV">
+              <i data-lucide="table" class="w-3 h-3 text-emerald-400"></i>
+              <span>CSV</span>
+            </button>
+            <button id="btnCopyTranscript" class="py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1 transition" title="Copiar tudo">
+              <i data-lucide="copy" class="w-3 h-3 text-amber-400"></i>
+              <span>Copiar</span>
+            </button>
           </div>
         </div>
 
+        <!-- Lista do Histórico -->
+        <div id="transcriptList" class="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs scroll-smooth">
+          <div class="text-center py-8 text-slate-500">
+            <i data-lucide="sparkles" class="w-6 h-6 mx-auto mb-1.5 opacity-40"></i>
+            <p>Tudo o que for conversado e traduzido aparecerá registrado aqui.</p>
+          </div>
+        </div>
+
+        <!-- Digitação Fallback -->
         <div class="p-2.5 border-t border-slate-800 bg-slate-950/80 flex gap-1.5">
           <input type="text" id="inputChatFallback" placeholder="Escreva uma mensagem..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
           <button id="btnSendChat" class="px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl flex items-center justify-center transition">
@@ -375,7 +430,7 @@
           <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Motor de Tradução</label>
           <select id="selectTranslateEngine" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
             <option value="mymemory" selected>Padrão Gratuito (MyMemory / LibreTranslate)</option>
-            <option value="gemini">Google Gemini AI (Maior fidelidade e gírias)</option>
+            <option value="gemini">Google Gemini AI (Maior precisão e gírias)</option>
           </select>
           <p class="text-[11px] text-slate-400 mt-1">O modo padrão funciona 100% grátis sem precisar de chaves.</p>
         </div>

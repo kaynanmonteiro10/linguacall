@@ -1,12 +1,13 @@
 /**
- * LinguaCall - Aplicação de Chamada com Tradução ao Vivo
+ * LinguaCall Pro - Aplicação de Chamada com Tradução ao Vivo
+ * Recursos: Câmera Dupla, Espelhamento, Gravação, Emojis, Exportação Avançada (TXT/CSV/Clipboard)
  * 100% Client-Side WebRTC
  */
 
 document.addEventListener('DOMContentLoaded', () => {
   lucide.createIcons();
 
-  // Verificar protocolo file://
+  // Protocolo file://
   const isFileProtocol = window.location.protocol === 'file:';
   const fileProtocolWarning = document.getElementById('fileProtocolWarning');
   if (isFileProtocol && fileProtocolWarning) {
@@ -19,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const callScreen = document.getElementById('callScreen');
   const connectionStatusBadge = document.getElementById('connectionStatusBadge');
   const connectionStatusText = document.getElementById('connectionStatusText');
+  const callTimerDisplay = document.getElementById('callTimerDisplay');
+  const reactionOverlay = document.getElementById('reactionOverlay');
   
   // Lobby Inputs
   const inputUserName = document.getElementById('inputUserName');
@@ -29,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputRoomCode = document.getElementById('inputRoomCode');
   const btnJoinRoom = document.getElementById('btnJoinRoom');
 
-  // Seletores Rápidos Durante a Chamada (In-Call)
+  // Seletores Rápidos In-Call
   const inCallSpeakLang = document.getElementById('inCallSpeakLang');
   const inCallTargetLang = document.getElementById('inCallTargetLang');
 
@@ -43,16 +46,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnShareScreen = document.getElementById('btnShareScreen');
   const btnToggleTTS = document.getElementById('btnToggleTTS');
   const iconTTS = document.getElementById('iconTTS');
+  const btnRecordCall = document.getElementById('btnRecordCall');
+  const iconRecord = document.getElementById('iconRecord');
   const btnEndCall = document.getElementById('btnEndCall');
 
-  // Gaveta de Chat no Mobile
-  const btnToggleDrawerChat = document.getElementById('btnToggleDrawerChat');
-  const btnCloseChatDrawer = document.getElementById('btnCloseChatDrawer');
-  const chatDrawer = document.getElementById('chatDrawer');
-  const chatNotificationBadge = document.getElementById('chatNotificationBadge');
-
-  // Mídia Local
+  // Controles de Câmera Local (Espelho & Dual Camera)
+  const btnMirrorLocalVideo = document.getElementById('btnMirrorLocalVideo');
+  const btnToggleDualCamera = document.getElementById('btnToggleDualCamera');
   const localVideo = document.getElementById('localVideo');
+  const localSecondVideo = document.getElementById('localSecondVideo');
   const localAvatarBox = document.getElementById('localAvatarBox');
   const localUserNameDisplay = document.getElementById('localUserNameDisplay');
   const localUserAvatar = document.getElementById('localUserAvatar');
@@ -60,6 +62,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const localAudioWave = document.getElementById('localAudioWave');
   const localLiveCaptionOverlay = document.getElementById('localLiveCaptionOverlay');
   const localLiveCaptionText = document.getElementById('localLiveCaptionText');
+
+  // Gaveta de Chat / Histórico
+  const btnToggleDrawerChat = document.getElementById('btnToggleDrawerChat');
+  const btnCloseChatDrawer = document.getElementById('btnCloseChatDrawer');
+  const chatDrawer = document.getElementById('chatDrawer');
+  const chatNotificationBadge = document.getElementById('chatNotificationBadge');
+  const btnExportTxt = document.getElementById('btnExportTxt');
+  const btnExportCsv = document.getElementById('btnExportCsv');
+  const btnCopyTranscript = document.getElementById('btnCopyTranscript');
+  const transcriptList = document.getElementById('transcriptList');
+  const inputChatFallback = document.getElementById('inputChatFallback');
+  const btnSendChat = document.getElementById('btnSendChat');
 
   // Mídia Remota
   const remoteVideo = document.getElementById('remoteVideo');
@@ -77,13 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const remoteLiveCaptionTranslated = document.getElementById('remoteLiveCaptionTranslated');
   const remoteLiveCaptionOriginal = document.getElementById('remoteLiveCaptionOriginal');
 
-  // Histórico
-  const transcriptList = document.getElementById('transcriptList');
-  const inputChatFallback = document.getElementById('inputChatFallback');
-  const btnSendChat = document.getElementById('btnSendChat');
-  const btnExportTranscript = document.getElementById('btnExportTranscript');
-
-  // Configurações
+  // Modal Configurações
   const btnSettings = document.getElementById('btnSettings');
   const settingsModal = document.getElementById('settingsModal');
   const btnCloseSettings = document.getElementById('btnCloseSettings');
@@ -106,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     call: null,
     dataConnection: null,
     localStream: null,
+    localSecondStream: null,
     remoteStream: null,
     screenStream: null,
     roomId: null,
@@ -113,10 +122,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     isMuted: false,
     isVideoEnabled: true,
-    currentFacingMode: 'user', // 'user' ou 'environment'
+    isMirrored: localStorage.getItem('lc_mirror') !== 'false',
+    isDualCameraActive: false,
+    currentFacingMode: 'user',
     isSharingScreen: false,
     ttsEnabled: false,
     isChatDrawerOpen: false,
+    
+    // Gravação
+    mediaRecorder: null,
+    recordedChunks: [],
+    isRecording: false,
+    
+    // Temporizador
+    callStartTime: null,
+    timerInterval: null,
     
     transcriptHistory: []
   };
@@ -131,11 +151,231 @@ document.addEventListener('DOMContentLoaded', () => {
   inputGeminiApiKey.value = state.geminiKey;
   if (state.engine === 'gemini') geminiKeyContainer.classList.remove('hidden');
 
+  applyMirrorSetting();
+
   const urlParams = new URLSearchParams(window.location.search);
   const roomFromUrl = urlParams.get('room');
   if (roomFromUrl) inputRoomCode.value = roomFromUrl;
 
-  // Sincronizar mudança de idiomas DURANTE A CHAMADA (In-Call)
+  // ==========================================
+  // ESPELHAMENTO DE CÂMERA (CORREÇÃO DE ROSTO)
+  // ==========================================
+  btnMirrorLocalVideo.addEventListener('click', () => {
+    state.isMirrored = !state.isMirrored;
+    localStorage.setItem('lc_mirror', state.isMirrored);
+    applyMirrorSetting();
+    showNotification(state.isMirrored ? 'Espelhamento ativado' : 'Espelhamento desativado (visão real)');
+  });
+
+  function applyMirrorSetting() {
+    if (state.isMirrored) {
+      localVideo.classList.add('-scale-x-100');
+      btnMirrorLocalVideo.classList.add('text-indigo-400');
+    } else {
+      localVideo.classList.remove('-scale-x-100');
+      btnMirrorLocalVideo.classList.remove('text-indigo-400');
+    }
+  }
+
+  // ==========================================
+  // CÂMERA DUPLA SIMULTÂNEA (DUAL CAMERA)
+  // ==========================================
+  btnToggleDualCamera.addEventListener('click', async () => {
+    if (!state.isVideoEnabled) {
+      showNotification('Ligue a câmera principal primeiro.');
+      return;
+    }
+
+    if (!state.isDualCameraActive) {
+      try {
+        showNotification('Iniciando segunda câmera...');
+        const secondFacing = state.currentFacingMode === 'user' ? 'environment' : 'user';
+        const secondStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: secondFacing, width: { ideal: 640 }, height: { ideal: 480 } }
+        });
+        state.localSecondStream = secondStream;
+        state.isDualCameraActive = true;
+
+        localSecondVideo.srcObject = secondStream;
+        localSecondVideo.classList.remove('hidden');
+        localVideo.classList.remove('h-full');
+        localVideo.classList.add('h-1/2');
+
+        btnToggleDualCamera.classList.add('text-emerald-400', 'bg-emerald-950/60');
+        showNotification('Câmera dupla ativada com sucesso!');
+      } catch (err) {
+        console.warn('Erro ao ativar câmera dupla:', err);
+        alert('Seu dispositivo ou navegador não permite manter as duas câmeras (frontal e traseira) ligadas ao mesmo tempo no hardware.\n\nVocê pode usar o botão "Virar Câmera" na barra inferior para alternar facilmente!');
+      }
+    } else {
+      stopSecondCamera();
+      showNotification('Segunda câmera desativada.');
+    }
+  });
+
+  function stopSecondCamera() {
+    if (state.localSecondStream) {
+      state.localSecondStream.getTracks().forEach(t => t.stop());
+      state.localSecondStream = null;
+    }
+    state.isDualCameraActive = false;
+    localSecondVideo.classList.add('hidden');
+    localVideo.classList.remove('h-1/2');
+    localVideo.classList.add('h-full');
+    btnToggleDualCamera.classList.remove('text-emerald-400', 'bg-emerald-950/60');
+  }
+
+  // ==========================================
+  // REAÇÕES RÁPIDAS (EMOJIS FLUTUANTES)
+  // ==========================================
+  document.querySelectorAll('.btnReaction').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const emoji = btn.dataset.emoji;
+      triggerFloatingEmoji(emoji, true);
+      sendData({ type: 'reaction', emoji: emoji });
+    });
+  });
+
+  function triggerFloatingEmoji(emoji, isSelf = false) {
+    const el = document.createElement('div');
+    el.className = 'absolute text-3xl select-none animate-float-up pointer-events-none z-50';
+    el.style.left = isSelf ? `${Math.random() * 30 + 15}%` : `${Math.random() * 40 + 40}%`;
+    el.style.bottom = '80px';
+    el.textContent = emoji;
+    reactionOverlay.appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+
+  // ==========================================
+  // GRAVAÇÃO DA CHAMADA (MEDIARECORDER LOCAL)
+  // ==========================================
+  btnRecordCall.addEventListener('click', () => {
+    if (!state.isRecording) {
+      startRecording();
+    } else {
+      stopRecording();
+    }
+  });
+
+  function startRecording() {
+    try {
+      const audioTracks = [];
+      if (state.localStream) audioTracks.push(...state.localStream.getAudioTracks());
+      if (state.remoteStream) audioTracks.push(...state.remoteStream.getAudioTracks());
+
+      const streamToRecord = state.remoteStream || state.localStream;
+      if (!streamToRecord) {
+        showNotification('Nenhum vídeo ativo para gravar.');
+        return;
+      }
+
+      state.recordedChunks = [];
+      state.mediaRecorder = new MediaRecorder(streamToRecord, { mimeType: 'video/webm;codecs=vp8,opus' });
+
+      state.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) state.recordedChunks.push(e.data);
+      };
+
+      state.mediaRecorder.onstop = () => {
+        const blob = new Blob(state.recordedChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reuniao-${state.roomId || 'linguacall'}.webm`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showNotification('Gravação concluída e salva no seu aparelho!');
+      };
+
+      state.mediaRecorder.start(1000);
+      state.isRecording = true;
+      btnRecordCall.classList.add('bg-rose-600/30', 'text-rose-400', 'border-rose-500/50');
+      iconRecord.setAttribute('data-lucide', 'square');
+      lucide.createIcons();
+      showNotification('Gravação da reunião iniciada!');
+    } catch (e) {
+      console.warn('Erro ao gravar chamada:', e);
+      showNotification('Gravação não suportada neste navegador.');
+    }
+  }
+
+  function stopRecording() {
+    if (state.mediaRecorder && state.isRecording) {
+      state.mediaRecorder.stop();
+      state.isRecording = false;
+      btnRecordCall.classList.remove('bg-rose-600/30', 'text-rose-400', 'border-rose-500/50');
+      iconRecord.setAttribute('data-lucide', 'disc');
+      lucide.createIcons();
+    }
+  }
+
+  // ==========================================
+  // EXPORTAÇÃO AVANÇADA DO HISTÓRICO
+  // ==========================================
+
+  // 1. Exportar TXT
+  btnExportTxt.addEventListener('click', () => {
+    if (state.transcriptHistory.length === 0) {
+      alert('Nenhuma conversa no histórico ainda para exportar.');
+      return;
+    }
+    let fileContent = `RELATORIO DE REUNIAO - LINGUACALL\nData: ${new Date().toLocaleString()}\nSala: ${state.roomId}\nTotal de Falas: ${state.transcriptHistory.length}\n\n`;
+    state.transcriptHistory.forEach(item => {
+      fileContent += `[${item.timestamp}] ${item.sender}:\n`;
+      if (item.isSelf) {
+        fileContent += `  ${item.original}\n\n`;
+      } else {
+        fileContent += `  Traducao: ${item.translated || item.original}\n`;
+        fileContent += `  Original: ${item.original}\n\n`;
+      }
+    });
+    downloadBlob(fileContent, `transcricao-${state.roomId || 'reuniao'}.txt`, 'text/plain;charset=utf-8');
+  });
+
+  // 2. Exportar CSV (Excel / Planilhas)
+  btnExportCsv.addEventListener('click', () => {
+    if (state.transcriptHistory.length === 0) {
+      alert('Nenhuma conversa gravada para exportar em CSV.');
+      return;
+    }
+    let csv = `Horario,Participante,Texto Original,Texto Traduzido\n`;
+    state.transcriptHistory.forEach(item => {
+      const orig = `"${(item.original || '').replace(/"/g, '""')}"`;
+      const trans = `"${(item.translated || item.original || '').replace(/"/g, '""')}"`;
+      csv += `${item.timestamp},"${item.sender}",${orig},${trans}\n`;
+    });
+    downloadBlob(csv, `transcricao-${state.roomId || 'reuniao'}.csv`, 'text/csv;charset=utf-8');
+  });
+
+  // 3. Copiar Transcrição com 1 Clique
+  btnCopyTranscript.addEventListener('click', () => {
+    if (state.transcriptHistory.length === 0) {
+      alert('Nada para copiar ainda.');
+      return;
+    }
+    let text = `Transcrição LinguaCall (${state.roomId}):\n\n`;
+    state.transcriptHistory.forEach(item => {
+      const content = item.isSelf ? item.original : `${item.translated} (Original: ${item.original})`;
+      text += `[${item.timestamp}] ${item.sender}: ${content}\n`;
+    });
+    navigator.clipboard.writeText(text).then(() => {
+      showNotification('Histórico copiado para a área de transferência!');
+    });
+  });
+
+  function downloadBlob(content, filename, type) {
+    const blob = new Blob([content], { type: type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ==========================================
+  // TROCA DE IDIOMAS DURANTE A CHAMADA
+  // ==========================================
   inCallSpeakLang.addEventListener('change', (e) => {
     state.speakLang = e.target.value;
     localStorage.setItem('lc_speak_lang', state.speakLang);
@@ -154,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
       speakLang: state.speakLang
     });
 
-    showNotification('Você agora está falando em: ' + state.speakLang);
+    showNotification('Você agora fala em: ' + state.speakLang);
   });
 
   inCallTargetLang.addEventListener('change', (e) => {
@@ -164,7 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showNotification('Você agora lê em: ' + state.targetLang.toUpperCase());
   });
 
-  // Gaveta de Chat no Mobile
+  // Gaveta Mobile
   btnToggleDrawerChat.addEventListener('click', () => {
     state.isChatDrawerOpen = !state.isChatDrawerOpen;
     updateChatDrawerUI();
@@ -270,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Falha de microfone:', err);
       let msg = 'O navegador não autorizou o microfone.';
       if (window.location.protocol === 'file:') {
-        msg += '\n\nAbra pelo link do GitHub Pages (com HTTPS) para liberar automaticamente no celular ou computador.';
+        msg += '\n\nAbra pelo link do GitHub Pages (com HTTPS) para liberar automaticamente.';
       }
       alert(msg);
       throw err;
@@ -281,8 +521,9 @@ document.addEventListener('DOMContentLoaded', () => {
     localVideo.srcObject = stream;
     localVideo.classList.remove('hidden');
     localAvatarBox.classList.add('hidden');
-    btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition';
+    btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
     iconCamera.setAttribute('data-lucide', 'video');
+    applyMirrorSetting();
     lucide.createIcons();
   }
 
@@ -290,13 +531,21 @@ document.addEventListener('DOMContentLoaded', () => {
     state.roomId = roomId;
     lobbyScreen.classList.add('hidden');
     callScreen.classList.remove('hidden');
-    
-    // Ocultar cabeçalho da página para maximizar tela no mobile
     mainHeader.classList.add('hidden');
 
     localUserNameDisplay.textContent = state.userName;
     localUserAvatar.textContent = (state.userName[0] || 'V').toUpperCase();
     localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
+
+    // Iniciar Temporizador da Chamada
+    state.callStartTime = Date.now();
+    clearInterval(state.timerInterval);
+    state.timerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - state.callStartTime) / 1000);
+      const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const secs = String(elapsed % 60).padStart(2, '0');
+      callTimerDisplay.textContent = `${mins}:${secs}`;
+    }, 1000);
 
     const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
@@ -353,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isInitiator) {
           updateConnectionBadge('Aguardando colega...', 'connecting');
           remoteUserNameDisplay.textContent = 'Aguardando colega...';
-          remoteStatusIndicator.textContent = 'Envie o link para o colega entrar';
+          remoteStatusIndicator.textContent = 'Envie o convite para o colega';
         } else {
           updateConnectionBadge('Conectando...', 'connecting');
           connectToPeer(roomId);
@@ -481,6 +730,8 @@ document.addEventListener('DOMContentLoaded', () => {
         remoteVideo.classList.add('hidden');
         remoteAvatarBox.classList.remove('hidden');
       }
+    } else if (data.type === 'reaction') {
+      triggerFloatingEmoji(data.emoji, false);
     } else if (data.type === 'speech') {
       handleRemoteSpeech(data);
     } else if (data.type === 'chat') {
@@ -708,7 +959,6 @@ document.addEventListener('DOMContentLoaded', () => {
     transcriptList.appendChild(div);
     transcriptList.scrollTop = transcriptList.scrollHeight;
 
-    // Se a gaveta estiver fechada no mobile, exibe a bolinha de nova mensagem
     if (!state.isChatDrawerOpen) {
       chatNotificationBadge.classList.remove('hidden');
     }
@@ -752,37 +1002,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  btnExportTranscript.addEventListener('click', () => {
-    if (state.transcriptHistory.length === 0) {
-      alert('Nenhuma conversa no histórico para baixar.');
-      return;
-    }
-
-    let fileContent = `HISTORICO DA REUNIAO - LINGUACALL\nData: ${new Date().toLocaleString()}\nSala: ${state.roomId}\n\n`;
-    state.transcriptHistory.forEach(item => {
-      fileContent += `[${item.timestamp}] ${item.sender}:\n`;
-      if (item.isSelf) {
-        fileContent += `  ${item.original}\n\n`;
-      } else {
-        fileContent += `  Traducao: ${item.translated || item.original}\n`;
-        fileContent += `  Original: ${item.original}\n\n`;
-      }
-    });
-
-    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `transcricao-${state.roomId || 'reuniao'}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  });
-
   // ==========================================
   // CONTROLES DE MÍDIA (FLIP CAMERA, MIC, ETC)
   // ==========================================
 
-  // Alternar Câmera Frontal / Traseira (Flip Camera no Celular)
   btnFlipCamera.addEventListener('click', async () => {
     if (!state.localStream || !state.isVideoEnabled) {
       showNotification('Ligue a câmera primeiro para alternar.');
@@ -805,11 +1028,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.currentFacingMode = newFacingMode;
 
       localVideo.srcObject = state.localStream;
-      if (newFacingMode === 'environment') {
-        localVideo.classList.remove('-scale-x-100');
-      } else {
-        localVideo.classList.add('-scale-x-100');
-      }
+      applyMirrorSetting();
 
       if (state.call?.peerConnection) {
         const sender = state.call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -823,7 +1042,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Mutar/Desmutar Microfone
   btnToggleMic.addEventListener('click', () => {
     state.isMuted = !state.isMuted;
     if (state.localStream) {
@@ -848,7 +1066,6 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   });
 
-  // Ligar/Desligar Câmera
   btnToggleCamera.addEventListener('click', async () => {
     state.isVideoEnabled = !state.isVideoEnabled;
 
@@ -889,7 +1106,6 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   });
 
-  // Compartilhamento de Tela
   if (btnShareScreen) {
     btnShareScreen.addEventListener('click', async () => {
       if (!state.isSharingScreen) {
@@ -969,6 +1185,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function cleanupAndExitCall() {
     stopScreenShare();
+    stopSecondCamera();
+    stopRecording();
+    clearInterval(state.timerInterval);
+
     if (speechRecognizer) {
       try { speechRecognizer.stop(); } catch(e) {}
     }
