@@ -138,7 +138,7 @@
         <div>
           <h1 class="font-bold text-sm leading-tight text-white flex items-center gap-1.5">
             LinguaCall Pro
-            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v17</span>
+            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v18</span>
           </h1>
           <p class="text-[10px] text-neutral-400">Criado por Kaynan Monteiro</p>
         </div>
@@ -617,8 +617,8 @@
               <i data-lucide="monitor-up" class="w-5 h-5"></i>
             </button>
 
-            <button id="btnToggleTTS" class="hidden sm:flex w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-300 items-center justify-center transition active:scale-95" title="Ouvir a tradução por voz" aria-label="Ouvir tradução">
-              <i data-lucide="volume-2" id="iconTTS" class="w-5 h-5"></i>
+            <button id="btnToggleTTS" class="flex w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-300 items-center justify-center transition active:scale-95" title="Ouvir a tradução por voz" aria-label="Ouvir tradução" aria-pressed="false">
+              <i data-lucide="volume-x" id="iconTTS" class="w-5 h-5"></i>
             </button>
           </div>
 
@@ -788,7 +788,7 @@
 
       <div class="flex-1 overflow-y-auto py-3 space-y-3 text-xs">
         <p class="text-neutral-400 leading-relaxed">
-          Este modo <strong class="text-neutral-200">não usa o reconhecimento de voz do navegador</strong> (que é o que falha em alguns Androids). Ele grava a sua voz, traduz e toca a tradução para o colega.
+          Este modo <strong class="text-neutral-200">não usa o reconhecimento de voz do navegador</strong> (que é o que falha em alguns Androids). Ele envia sua voz original ao colega; a tradução escrita é feita pelo chat.
         </p>
 
         <div class="p-3 bg-bg rounded-lg border border-line">
@@ -801,7 +801,7 @@
           </div>
         </div>
 
-        <p id="safeMicHint" class="text-[11px] text-neutral-500 leading-relaxed">Segure o botão, fale e solte. Sua voz vai para o colega e o texto aparece no histórico.</p>
+        <p id="safeMicHint" class="text-[11px] text-neutral-500 leading-relaxed">Segure o botão, fale e solte. Sua voz vai ao colega sem depender do reconhecimento do navegador. Depois, digite o que falou no chat para enviar a tradução escrita.</p>
 
         <button id="btnSafeMicRecord" class="w-full h-11 rounded-lg bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] font-medium text-sm flex items-center justify-center gap-2 transition">
           <i data-lucide="mic" class="w-4 h-4"></i>
@@ -811,14 +811,14 @@
         <div class="p-3 bg-bg rounded-lg border border-line space-y-1">
           <div class="text-[11px] text-neutral-500">Minha fala</div>
           <div id="safeMicOriginal" class="text-neutral-200 leading-snug">—</div>
-          <div class="text-[11px] text-neutral-500 pt-1.5">Tradução enviada ao colega</div>
+          <div class="text-[11px] text-neutral-500 pt-1.5">Próximo passo</div>
           <div id="safeMicTranslated" class="text-neutral-200 leading-snug">—</div>
         </div>
 
         <button id="btnSafeMicRetry" class="hidden w-full h-9 rounded-lg bg-raised hover:bg-line text-neutral-200 text-xs transition">Tentar de novo</button>
 
         <p class="text-[11px] text-neutral-500 leading-relaxed">
-          No computador também funciona com a barra de espaço. A voz vai para o colega já traduzida, e o texto aparece no histórico.
+          No computador, clique para começar e clique de novo para parar. O histórico registra o envio da mensagem de voz.
         </p>
       </div>
 
@@ -1145,8 +1145,6 @@
       </div>
     </div>
   </div>
-
-  <audio id="remoteAudioFallback" autoplay playsinline class="hidden"></audio>
 
   <script src="app.js"></script>
 </body>

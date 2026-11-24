@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // PWA REGISTRO & INSTALL
   // ==========================================
   let deferredPrompt = null;
+  let pendingAppReload = false;
   const btnInstallPwa = document.getElementById('btnInstallPwa');
 
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
@@ -33,8 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!nw) return;
         nw.addEventListener('statechange', () => {
           if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-            showNotification('Atualização baixada. Recarregando…');
-            setTimeout(() => window.location.reload(), 600);
+            const activeCallScreen = document.getElementById('callScreen');
+            if (activeCallScreen && !activeCallScreen.classList.contains('hidden')) {
+              pendingAppReload = true;
+              showNotification('Atualização pronta. Ela será aplicada ao encerrar a chamada.');
+            } else {
+              window.location.reload();
+            }
           }
         });
       });
@@ -107,7 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const remoteUserAvatar = document.getElementById('remoteUserAvatar');
   const remoteLangBadge = document.getElementById('remoteLangBadge');
   const remoteAudioWave = document.getElementById('remoteAudioWave');
-  const remoteAudioFallback = document.getElementById('remoteAudioFallback');
   const remoteStatusIndicator = document.getElementById('remoteStatusIndicator');
   
   // Legendas Sobrepostas na Tela
@@ -149,9 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
     userName: localStorage.getItem('lc_user_name') || 'Você',
     speakLang: localStorage.getItem('lc_speak_lang') || 'pt-BR',
     targetLang: localStorage.getItem('lc_target_lang') || 'pt',
-    engine: localStorage.getItem('lc_engine') || 'mymemory',
     engine: 'google',
-    autoRestartSpeech: true,
+    autoRestartSpeech: localStorage.getItem('lc_continuous_recognition') !== 'false',
     enableBeep: localStorage.getItem('lc_beep') !== 'false',
     enableBlur: localStorage.getItem('lc_blur_bg') === 'true',
     autoReconnect: localStorage.getItem('lc_auto_reconnect') !== 'false',
@@ -166,9 +170,14 @@ document.addEventListener('DOMContentLoaded', () => {
     remoteStream: null,
     screenStream: null,
     roomId: null,
+    callActive: false,
+    hasConnectedBefore: false,
+    remotePeerId: null,
     isInitiator: false,
     isReconnecting: false,
     reconnectAttempts: 0,
+    reconnectTimer: null,
+    reconnectCheckTimer: null,
     
     isMuted: false,
     isVideoEnabled: true,
@@ -202,9 +211,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkAudioBeep = document.getElementById('checkAudioBeep');
   const checkBackgroundBlur = document.getElementById('checkBackgroundBlur');
   const checkAutoReconnect = document.getElementById('checkAutoReconnect');
+  const checkContinuousRecognition = document.getElementById('checkContinuousRecognition');
   if (checkAudioBeep) checkAudioBeep.checked = state.enableBeep;
   if (checkBackgroundBlur) checkBackgroundBlur.checked = state.enableBlur;
   if (checkAutoReconnect) checkAutoReconnect.checked = state.autoReconnect;
+  if (checkContinuousRecognition) checkContinuousRecognition.checked = state.autoRestartSpeech;
 
   applyMirrorSetting();
   applyBlurSetting();
@@ -339,6 +350,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const senderColor = item.isSelf ? 'text-accent-400' : 'text-ok-400';
       const mainText = item.isSelf ? item.original : (item.translated || item.original);
       const subText = (!item.isSelf && item.translated) ? `Original: ${item.original}` : '';
+      const errorText = item.translationError
+        ? `<div class="text-[10px] text-danger-400 mt-1">${escapeHtml(item.translationError)}</div>` : '';
       const bookmarkColor = item.isSaved ? 'text-accent-400 fill-amber-400' : 'text-neutral-500 hover:text-accent-400';
 
       div.innerHTML = `
@@ -353,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="text-neutral-100 font-medium">${escapeHtml(mainText)}</div>
         ${subText ? `<div class="text-[10px] text-neutral-400 italic mt-0.5">${escapeHtml(subText)}</div>` : ''}
+        ${errorText}
       `;
       transcriptList.appendChild(div);
     });
@@ -374,7 +388,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   on('sliderRemoteVolume', 'input', (e) => {
     const vol = parseFloat(e.target.value) / 100;
-    if (remoteAudioFallback) remoteAudioFallback.volume = vol;
     if (remoteVideo) remoteVideo.volume = vol;
   });
 
@@ -455,24 +468,24 @@ document.addEventListener('DOMContentLoaded', () => {
       showNotification('Digite uma mensagem antes.');
       return;
     }
-    inputChatFallback.value = '';
-
-    showNotification('Traduzindo e sintetizando voz...');
-    const translated = await translateText(text, state.speakLang, state.targetLang);
-
-    sendData({
+    const sent = sendData({
       type: 'remote_tts',
       sender: state.userName,
-      text: text,
-      translated: translated,
-      lang: state.targetLang
+      text,
+      lang: state.speakLang
     });
+    if (!sent) {
+      showNotification('Colega desconectado. A mensagem não foi enviada.');
+      return;
+    }
+    inputChatFallback.value = '';
+    showNotification('Mensagem enviada para ser lida no idioma do colega.');
 
     addTranscriptItem({
       sender: state.userName + ' (Voz)',
       isSelf: true,
       original: text,
-      translated: translated,
+      translated: null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
   });
@@ -1077,11 +1090,13 @@ document.addEventListener('DOMContentLoaded', () => {
     state.engine = 'google';
     state.enableBeep = checkAudioBeep ? checkAudioBeep.checked : true;
     state.autoReconnect = checkAutoReconnect ? checkAutoReconnect.checked : true;
+    state.autoRestartSpeech = checkContinuousRecognition ? checkContinuousRecognition.checked : true;
     if (checkBackgroundBlur) state.enableBlur = checkBackgroundBlur.checked;
     localStorage.setItem('lc_engine', 'google');
     localStorage.setItem('lc_beep', state.enableBeep);
     localStorage.setItem('lc_blur_bg', state.enableBlur);
     localStorage.setItem('lc_auto_reconnect', state.autoReconnect);
+    localStorage.setItem('lc_continuous_recognition', state.autoRestartSpeech);
     applyBlurSetting();
     settingsModal?.classList.add('hidden');
     showNotification('Configurações salvas!');
@@ -1358,6 +1373,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setupCallUI(roomId) {
     state.roomId = roomId;
+    state.callActive = true;
+    state.hasConnectedBefore = false;
+    state.remotePeerId = null;
+    state.isReconnecting = false;
+    state.reconnectAttempts = 0;
+    state.isMuted = false;
+    state.ttsEnabled = false;
+    state.speechBlocked = false;
+    speechSeq = 0;
+    speechRendered = 0;
+    speechPending.clear();
+    cancelQueuedSpeech();
+    updateTTSButton();
+    if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-100 flex items-center justify-center transition active:scale-95';
+    if (iconMic) iconMic.setAttribute('data-lucide', 'mic');
     
     state.transcriptHistory = [];
     state.savedVocab = [];
@@ -1448,14 +1478,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function createPeerConnection(roomId) {
+    if (!state.callActive || !roomId) return;
+    detachConnection(state.call);
+    detachConnection(state.dataConnection);
+    state.call = null;
+    state.dataConnection = null;
+    if (state.peer && !state.peer.destroyed) state.peer.destroy();
+
     const peerId = state.isInitiator ? roomId : 'guest-' + Math.random().toString(36).substring(2, 8);
+    const peer = new Peer(peerId, { debug: 1, config: rtcConfig });
+    state.peer = peer;
+    const isCurrentPeer = () => state.callActive && state.peer === peer;
 
-    state.peer = new Peer(peerId, {
-      debug: 1,
-      config: rtcConfig
-    });
-
-    state.peer.on('open', (id) => {
+    peer.on('open', () => {
+      if (!isCurrentPeer()) return;
       if (state.isInitiator) {
         updateConnectionBadge('Aguardando colega...', 'connecting');
         if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Aguardando colega...';
@@ -1472,36 +1508,58 @@ document.addEventListener('DOMContentLoaded', () => {
       updateListenStatusBar();
     });
 
-    state.peer.on('call', (incomingCall) => {
+    peer.on('call', (incomingCall) => {
+      if (!isCurrentPeer()) return;
+      detachConnection(state.call);
       state.call = incomingCall;
+      state.remotePeerId = incomingCall.peer;
       incomingCall.answer(state.localStream);
       incomingCall.on('stream', (remoteMediaStream) => {
-        attachRemoteStream(remoteMediaStream);
+        if (isCurrentPeer() && state.call === incomingCall) attachRemoteStream(remoteMediaStream);
+      });
+      incomingCall.on('close', () => {
+        if (!isCurrentPeer() || state.call !== incomingCall || state.isReconnecting) return;
+        updateConnectionBadge('Áudio interrompido. Aguardando conexão...', 'connecting');
+        if (!state.isInitiator) scheduleReconnect();
+      });
+      incomingCall.on('error', () => {
+        if (isCurrentPeer() && !state.isInitiator) scheduleReconnect();
       });
     });
 
-    state.peer.on('connection', (conn) => {
+    peer.on('connection', (conn) => {
+      if (!isCurrentPeer()) return;
+      detachConnection(state.dataConnection);
       state.dataConnection = conn;
       setupDataConnectionListeners(conn);
     });
 
-    state.peer.on('disconnected', () => {
+    peer.on('disconnected', () => {
+      if (!isCurrentPeer()) return;
       updateConnectionBadge('Conexão instável...', 'connecting');
       scheduleReconnect();
     });
 
-    state.peer.on('error', (err) => {
+    peer.on('close', () => {
+      if (isCurrentPeer()) scheduleReconnect();
+    });
+
+    peer.on('error', (err) => {
+      if (!isCurrentPeer()) return;
       console.error('Peer error:', err);
-      // Erro de ID já em uso: a sala dona do código está ocupada
       if (err && err.type === 'unavailable-id') {
+        if (state.reconnectAttempts > 0) {
+          scheduleReconnect();
+          return;
+        }
         updateConnectionBadge('Sala cheia ou link inválido', 'error');
-        showNotification('Não foi possível entrar: sala cheia ou link inválido.');
-        setTimeout(() => cleanupAndExitCall(true), 2200);
+        showNotification('Não foi possível entrar: sala cheia ou link inválido. Encerre e tente outro link.');
         return;
       }
-      if (err && (err.type === 'peer-unavailable' || err.type === 'network')) {
+      if (err && err.type === 'peer-unavailable') {
         updateConnectionBadge('Colega não encontrado', 'error');
-        showNotification('Sala não encontrada. Confira o código ou peça o link de novo.');
+        showNotification('Colega ainda não encontrado. Continuaremos tentando.');
+        scheduleReconnect();
         return;
       }
       updateConnectionBadge('Erro na conexão', 'error');
@@ -1512,50 +1570,76 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // RECONEXÃO AUTOMÁTICA SE A CHAMADA CAIR
   // ==========================================
+  function detachConnection(conn) {
+    if (!conn) return;
+    try { conn.removeAllListeners(); } catch (e) {}
+    try { conn.close(); } catch (e) {}
+  }
+
+  function clearReconnectTimers() {
+    clearTimeout(state.reconnectTimer);
+    clearTimeout(state.reconnectCheckTimer);
+    state.reconnectTimer = null;
+    state.reconnectCheckTimer = null;
+  }
+
+  function markPeerConnected() {
+    if (!state.callActive || !state.dataConnection?.open || !state.call?.open) return;
+    clearReconnectTimers();
+    state.reconnectAttempts = 0;
+    state.isReconnecting = false;
+    updateConnectionBadge('Conectado', 'connected');
+  }
+
   function scheduleReconnect() {
-    if (!state.autoReconnect || !state.roomId || state.isReconnecting) return;
+    if (!state.callActive || !state.autoReconnect || !state.roomId || state.isReconnecting) return;
     if (state.reconnectAttempts >= 12) {
       updateConnectionBadge('Falha ao reconectar', 'error');
       showNotification('Não foi possível reconectar automaticamente. Tente entrar de novo.');
       return;
     }
 
+    clearTimeout(state.reconnectCheckTimer);
+    state.reconnectCheckTimer = null;
     state.isReconnecting = true;
     state.reconnectAttempts++;
     const delay = Math.min(8000, 1200 * state.reconnectAttempts);
     updateConnectionBadge(`Reconectando... (${state.reconnectAttempts})`, 'connecting');
 
-    setTimeout(() => {
-      if (!state.roomId || (!callScreen || callScreen.classList.contains('hidden'))) {
+    state.reconnectTimer = setTimeout(() => {
+      state.reconnectTimer = null;
+      if (!state.callActive || !state.roomId) {
         state.isReconnecting = false;
         return;
       }
 
       try {
-        if (state.peer && !state.peer.destroyed) {
-          if (state.peer.disconnected && !state.peer.destroyed) {
-            state.peer.reconnect();
-          }
-        } else {
+        if (!state.peer || state.peer.destroyed || state.peer.disconnected || !state.peer.open) {
           createPeerConnection(state.roomId);
+        } else if (!state.isInitiator) {
+          connectToPeer(state.roomId);
         }
       } catch (e) {
         try { createPeerConnection(state.roomId); } catch (err) {}
       }
 
-      // Se em 4s o colega continuar fora, tenta de novo
-      setTimeout(() => {
-        state.isReconnecting = false;
-        const connected = state.dataConnection && state.dataConnection.open;
-        if (!connected) scheduleReconnect();
-        else state.reconnectAttempts = 0;
-      }, 4000);
+      state.reconnectCheckTimer = setTimeout(() => {
+        state.reconnectCheckTimer = null;
+        if (!state.callActive) return;
+        if (state.dataConnection?.open && state.call?.open) {
+          markPeerConnected();
+        } else {
+          state.isReconnecting = false;
+          scheduleReconnect();
+        }
+      }, 5000);
     }, delay);
   }
 
   window.addEventListener('online', () => {
     if (state.roomId && callScreen && !callScreen.classList.contains('hidden')) {
       showNotification('Internet voltou. Reconectando a chamada...');
+      clearReconnectTimers();
       state.reconnectAttempts = 0;
       state.isReconnecting = false;
       scheduleReconnect();
@@ -1570,10 +1654,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function connectToPeer(hostRoomId) {
+    if (!state.callActive || !state.peer || !state.peer.open || state.peer.disconnected) {
+      throw new Error('Peer ainda não está conectado');
+    }
+    detachConnection(state.call);
+    detachConnection(state.dataConnection);
+    state.call = null;
+    state.dataConnection = null;
+
     const call = state.peer.call(hostRoomId, state.localStream);
     state.call = call;
     call.on('stream', (remoteMediaStream) => {
-      attachRemoteStream(remoteMediaStream);
+      if (state.callActive && state.call === call) attachRemoteStream(remoteMediaStream);
+    });
+    call.on('close', () => {
+      if (!state.callActive || state.call !== call || state.isReconnecting) return;
+      updateConnectionBadge('Áudio interrompido. Aguardando conexão...', 'connecting');
+      scheduleReconnect();
+    });
+    call.on('error', () => {
+      if (state.callActive && state.call === call) scheduleReconnect();
     });
 
     const conn = state.peer.connect(hostRoomId);
@@ -1583,17 +1683,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function attachRemoteStream(remoteStream) {
     state.remoteStream = remoteStream;
+    state.hasConnectedBefore = true;
     if (remoteVideo) {
-      // O vídeo remoto NUNCA pode ser mudo: no Android o autoplay silencia
-      // o elemento e a voz do colega desaparece.
       remoteVideo.muted = false;
       remoteVideo.volume = 1;
       remoteVideo.srcObject = remoteStream;
-    }
-    if (remoteAudioFallback) {
-      remoteAudioFallback.muted = false;
-      remoteAudioFallback.volume = 1;
-      remoteAudioFallback.srcObject = remoteStream;
     }
 
     const videoTracks = remoteStream.getVideoTracks();
@@ -1605,20 +1699,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
     }
 
-    guardPlayback(remoteVideo, 'vídeo');
-    guardPlayback(remoteAudioFallback, 'áudio');
-    
+    guardPlayback(remoteVideo, 'vídeo e áudio');
     updateConnectionBadge('Conectado', 'connected');
     if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Conectado';
     applyBlurSetting();
-    state.reconnectAttempts = 0;
-    state.isReconnecting = false;
+    markPeerConnected();
     startNetworkMonitor();
     playConnectChime();
   }
 
   function setupDataConnectionListeners(conn) {
     conn.on('open', () => {
+      if (!state.callActive || state.dataConnection !== conn) return;
+      state.hasConnectedBefore = true;
+      state.remotePeerId = conn.peer;
       updateConnectionBadge('Conectado', 'connected');
       sendData({
         type: 'handshake',
@@ -1626,13 +1720,16 @@ document.addEventListener('DOMContentLoaded', () => {
         speakLang: state.speakLang,
         hasVideo: state.isVideoEnabled
       });
+      markPeerConnected();
     });
 
-    conn.on('data', async (data) => {
-      handleIncomingData(data);
+    conn.on('data', (data) => {
+      if (state.callActive && state.dataConnection === conn) handleIncomingData(data);
     });
 
     conn.on('close', () => {
+      if (!state.callActive || state.dataConnection !== conn) return;
+      state.dataConnection = null;
       updateConnectionBadge('Colega desconectou', 'connecting');
       if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Colega saiu';
       if (remoteLangBadge) remoteLangBadge.textContent = '--';
@@ -1640,8 +1737,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (remoteVideo) remoteVideo.classList.add('hidden');
       if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
       hideRemoteCaption();
-      // Tenta retomar a chamada sozinho, sem precisar reiniciar tudo
-      if (state.roomId && !state.isInitiator) scheduleReconnect();
+      if (!state.isInitiator) scheduleReconnect();
+    });
+
+    conn.on('error', () => {
+      if (state.callActive && state.dataConnection === conn && !state.isInitiator) scheduleReconnect();
     });
   }
 
@@ -1733,12 +1833,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function sendData(dataObj) {
-    if (state.dataConnection && state.dataConnection.open) {
+    if (!state.callActive || !state.dataConnection?.open) return false;
+    try {
       state.dataConnection.send(dataObj);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 
   async function handleIncomingData(data) {
+    if (data.type === 'call_end') {
+      if (!state.callActive) return;
+      cleanupAndExitCall(true);
+      showNotification('O colega encerrou a chamada.');
+      return;
+    }
+
     // ---- PING / PONG para medir qualidade de rede ----
     if (data.type === 'ping') {
       sendData({ type: 'pong', id: data.id, t: data.t });
@@ -1792,16 +1903,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (data.type === 'reaction') {
       triggerFloatingEmoji(data.emoji, false);
     } else if (data.type === 'remote_tts') {
-      speakText(data.translated, data.lang);
-      addTranscriptItem({
-        sender: data.sender + ' (Voz)',
-        isSelf: false,
-        original: data.text,
-        translated: data.translated,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-      showRemoteCaption(data.sender, data.text, data.translated);
-      playSoftBeep();
+      handleRemoteSpeech({ ...data, forceSpeech: true });
     } else if (data.type === 'voice_clip') {
       playIncomingVoiceClip(data);
     } else if (data.type === 'speech') {
@@ -1828,6 +1930,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!SpeechRecognition) {
       setBar('bg-neutral-600', 'Escuta: este navegador não transcreve voz (use o microfone com ondas)', false);
+      return;
+    }
+    if (!state.callActive) {
+      setBar('bg-neutral-600', 'Escuta desligada fora da chamada', false);
       return;
     }
     if (state.isMuted) {
@@ -1861,8 +1967,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Vigia da escuta: se ela parar (o Chrome encerra a sessão a cada ~60s,
   // troca de aba, tela bloqueada), religa em até 3s.
   setInterval(() => {
-    if (!callScreen || callScreen.classList.contains('hidden')) return;
-    if (state.speechUnsupported || state.speechBlocked || state.isMuted) return;
+    if (!state.callActive || !callScreen || callScreen.classList.contains('hidden')) return;
+    if (!state.autoRestartSpeech || state.speechUnsupported || state.speechBlocked || state.isMuted) return;
     if (!state.localStream || !speechRecognizer) return;
     if (isRecognitionRunning) return;
     try {
@@ -2141,7 +2247,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sample = state.speakLang.startsWith('pt') ? 'Olá, esta é uma tradução de teste.' : 'Hello, this is a translation test.';
     try {
       const out = await translateText(sample, state.speakLang, state.targetLang);
-      diag.lastTranslateOk = out && out !== sample;
+      diag.lastTranslateOk = !!out;
       diag.lastTranslateFrom = state.speakLang;
       diag.lastTranslateTo = state.targetLang;
     } catch (e) { diag.lastTranslateOk = false; }
@@ -2159,13 +2265,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // MODO SEGURO DE FALA (não usa reconhecimento de voz)
   // ==========================================
-  // Grava a voz, manda o áudio para o colega e traduz por um serviço
-  // que devolve TEXTO (a tradução é lida pelo próprio app).
+  // Envia a voz gravada sem depender do reconhecimento do navegador.
+  // A tradução escrita continua disponível pelo chat.
   const safeMic = {
     recorder: null,
     chunks: [],
     recording: false,
-    busy: false,
+    starting: false,
+    session: 0,
     startedAt: 0,
     meterTimer: null,
     audioCtx: null,
@@ -2187,8 +2294,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function ensureSafeMicStream() {
-    if (state.localStream && state.localStream.getAudioTracks().some(t => t.readyState === 'live')) {
+    if (state.localStream && state.localStream.getAudioTracks().some(t => t.readyState === 'live' && t.enabled)) {
       return state.localStream;
+    }
+    if (safeMic.stream && safeMic.stream.getAudioTracks().some(t => t.readyState === 'live' && t.enabled)) {
+      return safeMic.stream;
     }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     safeMic.stream = stream;
@@ -2223,31 +2333,53 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function startSafeMicRecording() {
-    if (safeMic.recording || safeMic.busy) return;
+    if (safeMic.recording || safeMic.starting || !state.callActive) return;
+    const session = ++safeMic.session;
+    safeMic.starting = true;
+    safeMicSetStatus('Abrindo microfone…', 'text-neutral-400');
     unlockAudioPlayback();
     try {
-      const stream = await ensureSafeMicStream();
+      const sourceStream = await ensureSafeMicStream();
+      const stream = new MediaStream(sourceStream.getAudioTracks());
+      if (!stream.getAudioTracks().length) throw new Error('Faixa de áudio indisponível');
+      if (session !== safeMic.session || !state.callActive) {
+        if (safeMic.stream) safeMic.stream.getTracks().forEach(track => track.stop());
+        safeMic.stream = null;
+        return;
+      }
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', ''].find(t => {
         try { return !t || MediaRecorder.isTypeSupported(t); } catch (e) { return false; }
       });
       safeMic.chunks = [];
-      safeMic.recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-      safeMic.recorder.ondataavailable = (e) => { if (e.data && e.data.size) safeMic.chunks.push(e.data); };
-      safeMic.recorder.onstop = () => finishSafeMicRecording();
-      safeMic.recorder.start();
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      safeMic.recorder = recorder;
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size) safeMic.chunks.push(e.data); };
+      recorder.onstop = () => {
+        if (session === safeMic.session) finishSafeMicRecording();
+      };
+      recorder.start();
       safeMic.recording = true;
       safeMic.startedAt = Date.now();
       safeMicSetStatus('Gravando…', 'text-ok-400');
       const label = document.getElementById('btnSafeMicRecordLabel');
-      if (label) label.textContent = 'Parar e traduzir';
+      if (label) label.textContent = 'Parar e enviar';
       startSafeMicMeter(stream);
     } catch (err) {
+      if (session !== safeMic.session) return;
       safeMicSetStatus('Microfone indisponível', 'text-danger-400');
       showNotification('Não consegui usar o microfone. Libere a permissão e tente de novo.');
+    } finally {
+      if (session === safeMic.session) safeMic.starting = false;
     }
   }
 
   function stopSafeMicRecording() {
+    if (safeMic.starting) {
+      safeMic.session++;
+      safeMic.starting = false;
+      safeMicSetStatus('Pronto', 'text-neutral-400');
+      return;
+    }
     if (!safeMic.recording) return;
     safeMic.recording = false;
     stopSafeMicMeter();
@@ -2262,70 +2394,46 @@ document.addEventListener('DOMContentLoaded', () => {
       safeMicSetStatus('Muito curto', 'text-accent-400');
       return;
     }
-    safeMic.busy = true;
-    safeMicSetStatus('Transcrevendo…', 'text-neutral-400');
-    document.getElementById('btnSafeMicRetry')?.classList.add('hidden');
 
     const blob = new Blob(safeMic.chunks, { type: safeMic.chunks[0].type || 'audio/webm' });
-    try {
-      const result = await transcribeAudio(blob);
-      if (!result || !result.text) throw new Error('sem texto');
-      safeMicShowOriginal(result.text);
-      const sourceLang = result.lang || state.speakLang.split('-')[0];
-      let translated = result.text;
-      if (sourceLang !== state.targetLang) {
-        translated = await translateText(result.text, sourceLang, state.targetLang);
-      }
-      safeMicShowTranslated(translated);
-
-      // 1) áudio original vai para o colega (ele ouve a sua voz)
-      sendAudioToPeer(blob);
-      // 2) tradução escrita entra no histórico e na legenda
-      sendData({
-        type: 'speech',
-        sender: state.userName,
-        text: result.text,
-        translated: translated,
-        lang: sourceLang,
-        timestamp: Date.now()
-      });
-      addTranscriptItem({
-        sender: state.userName,
-        isSelf: true,
-        original: result.text,
-        translated: translated,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-      addLiveCaption(state.userName, result.text, translated, true);
-      safeMicSetStatus('Enviado', 'text-ok-400');
-    } catch (err) {
-      // Sem transcrição possível: a voz JÁ foi enviada, o texto é digitado no chat
-      sendAudioToPeer(blob);
-      safeMicSetStatus('Voz enviada', 'text-ok-400');
-      safeMicShowOriginal('Voz enviada ao colega. Para traduzir, digite o texto no chat.');
+    const sent = await sendAudioToPeer(blob);
+    if (!state.callActive) return;
+    if (!sent) {
+      safeMicSetStatus('Colega desconectado', 'text-danger-400');
+      safeMicShowOriginal('O áudio não foi enviado. Conecte-se e tente de novo.');
       safeMicShowTranslated('—');
-      addTranscriptItem({
-        sender: state.userName + ' (voz)',
-        isSelf: true,
-        original: 'Mensagem de voz enviada.',
-        translated: null,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-    } finally {
-      safeMic.busy = false;
+      return;
     }
+
+    safeMicSetStatus('Voz enviada', 'text-ok-400');
+    safeMicShowOriginal('Mensagem de voz enviada ao colega.');
+    safeMicShowTranslated('Digite o que você falou no chat para enviar a tradução escrita.');
+    addTranscriptItem({
+      sender: state.userName + ' (voz)',
+      isSelf: true,
+      original: 'Mensagem de voz enviada.',
+      translated: null,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
   }
 
   // Envia o áudio gravado para o colega tocar (funciona em qualquer navegador)
   function sendAudioToPeer(blob) {
-    if (!state.dataConnection || !state.dataConnection.open) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = String(reader.result || '').split(',')[1] || '';
-      if (!base64) return;
-      sendData({ type: 'voice_clip', sender: state.userName, mime: blob.type || 'audio/webm', data: base64 });
-    };
-    reader.readAsDataURL(blob);
+    if (!state.callActive || !state.dataConnection?.open) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = String(reader.result || '').split(',')[1] || '';
+        resolve(!!base64 && sendData({
+          type: 'voice_clip',
+          sender: state.userName,
+          mime: blob.type || 'audio/webm',
+          data: base64
+        }));
+      };
+      reader.onerror = () => resolve(false);
+      reader.readAsDataURL(blob);
+    });
   }
 
   function playIncomingVoiceClip(data) {
@@ -2346,51 +2454,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
   }
 
-  // Transcrição: usa o reconhecimento do próprio navegador (sem chave).
-  // Sem chave, avisa com clareza em vez de falhar em silêncio.
-  async function transcribeAudio(blob) {
-    // Sem chave nenhuma: o próprio navegador transcreve (Chrome/Android tem isso de graça)
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const text = await new Promise((resolve) => {
-        let said = '';
-        let done = false;
-        let rec;
-        try {
-          rec = new SpeechRecognition();
-        } catch (e) { resolve(''); return; }
-        rec.lang = state.speakLang;
-        rec.continuous = true;
-        rec.interimResults = false;
-        rec.onresult = (ev) => {
-          for (let i = ev.resultIndex; i < ev.results.length; i++) {
-            if (ev.results[i].isFinal) said += ' ' + ev.results[i][0].transcript;
-          }
-        };
-        rec.onerror = () => { if (!done) { done = true; resolve(said.trim()); } };
-        rec.onend = () => { if (!done) { done = true; resolve(said.trim()); } };
-        // o áudio já está gravado; aqui só precisamos do texto da fala que acabou de acontecer
-        try { rec.start(); } catch (e) { done = true; resolve(''); return; }
-        setTimeout(() => { try { rec.stop(); } catch (e) {} }, 9000);
-      });
-      if (text) return { text, lang: state.speakLang.split('-')[0] };
-      throw new Error('sem texto');
-    }
-    throw new Error('sem transcrição');
-  }
-
   function openSafeMic() {
     document.getElementById('safeMicModal')?.classList.remove('hidden');
     unlockAudioPlayback();
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      safeMicSetStatus('Pronto', 'text-neutral-400');
-    } else {
-      // iPhone/Safari: sem transcrição local. O caminho é a voz + o texto digitado.
-      safeMicSetStatus('Voz direta (sem texto)', 'text-accent-400');
-      const hint = document.getElementById('safeMicHint');
-      if (hint) hint.textContent = 'Seu navegador não transcreve voz. Segure e fale: sua voz vai para o colega, e o texto você digita no chat para traduzir.';
-    }
+    safeMicSetStatus('Pronto', 'text-neutral-400');
+    safeMicShowOriginal('—');
+    safeMicShowTranslated('—');
     const btn = document.getElementById('btnSafeMicRecord');
     if (btn) {
       const isTouch = ('ontouchstart' in window);
@@ -2420,7 +2489,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('pointerleave', () => { if (safeMic.recording) stopSafeMicRecording(); });
     } else {
       btn.addEventListener('click', () => {
-        if (safeMic.recording) stopSafeMicRecording();
+        if (safeMic.recording || safeMic.starting) stopSafeMicRecording();
         else startSafeMicRecording();
       });
     }
@@ -2445,10 +2514,6 @@ document.addEventListener('DOMContentLoaded', () => {
         osc.connect(gain).connect(ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.05);
-      }
-      if (remoteAudioFallback) {
-        remoteAudioFallback.muted = false;
-        remoteAudioFallback.play().catch(() => {});
       }
       if (remoteVideo) {
         remoteVideo.muted = false;
@@ -2477,6 +2542,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   let speechRecognizer = null;
   let isRecognitionRunning = false;
+  let speechRestartTimer = null;
   let localCaptionTimeout = null;
   let remoteCaptionTimeout = null;
 
@@ -2492,6 +2558,11 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   function flushSpeechBuffer(reason) {
+    if (!state.callActive) {
+      clearTimeout(speechBuffer.timer);
+      speechBuffer.text = '';
+      return;
+    }
     clearTimeout(speechBuffer.timer);
     speechBuffer.timer = null;
     const phrase = (speechBuffer.text || '').trim();
@@ -2500,16 +2571,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // evita repetir a mesma frase (o Chrome às vezes reemite o resultado final)
     const now = Date.now();
     if (phrase === speechBuffer.lastSent && now - speechBuffer.lastSentAt < 4000) return;
-    speechBuffer.lastSent = phrase;
-    speechBuffer.lastSentAt = now;
 
-    sendData({
+    if (!sendData({
       type: 'speech',
       sender: state.userName,
       text: phrase,
       lang: speechBuffer.lang || state.speakLang,
       timestamp: now
-    });
+    })) return;
+    speechBuffer.lastSent = phrase;
+    speechBuffer.lastSentAt = now;
 
     addTranscriptItem({
       sender: state.userName,
@@ -2526,19 +2597,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Envia um trecho assim que o navegador reconhece — sem espera nenhuma
   function sendSpeechNow(piece) {
     const clean = (piece || '').trim();
-    if (!clean) return;
+    if (!state.callActive || !clean) return;
     const now = Date.now();
     if (clean === speechBuffer.lastSent && now - speechBuffer.lastSentAt < 1200) return;
-    speechBuffer.lastSent = clean;
-    speechBuffer.lastSentAt = now;
 
-    sendData({
+    if (!sendData({
       type: 'speech',
       sender: state.userName,
       text: clean,
       lang: state.speakLang,
       timestamp: now
-    });
+    })) return;
+    speechBuffer.lastSent = clean;
+    speechBuffer.lastSentAt = now;
     addTranscriptItem({
       sender: state.userName,
       isSelf: true,
@@ -2565,6 +2636,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function initSpeechRecognition() {
+    if (!state.callActive) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       // iPhone/Safari não têm reconhecimento de voz: avisa e segue com o chat + tradução
@@ -2586,7 +2658,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     speechRecognizer.onresult = (event) => {
-      if (state.isMuted) return;
+      if (!state.callActive || state.isMuted) return;
 
       let interim = '';
       let finalPart = '';
@@ -2649,29 +2721,33 @@ document.addEventListener('DOMContentLoaded', () => {
       speechBuffer.flushAt = 0;
       diag.restarts = (diag.restarts || 0) + 1;
       updateVoiceDiag();
-      if (state.speechBlocked) return;
+      if (!state.callActive || state.speechBlocked) return;
       if (state.autoRestartSpeech && !state.isMuted && state.localStream) {
-        setTimeout(() => {
-          if (!isRecognitionRunning && !state.isMuted && !state.speechBlocked) {
+        clearTimeout(speechRestartTimer);
+        speechRestartTimer = setTimeout(() => {
+          if (state.callActive && !isRecognitionRunning && !state.isMuted && !state.speechBlocked && speechRecognizer) {
             try { speechRecognizer.start(); } catch(e) {}
           }
         }, 400);
       }
     };
 
-    try { speechRecognizer.start(); } catch(e) {}
+    if (!state.isMuted) {
+      try { speechRecognizer.start(); } catch(e) {}
+    }
   }
 
   // Reinicia a escuta já com o novo idioma (sem isso ela fica parada após a troca)
   function restartSpeechRecognition(reason) {
-    if (state.speechUnsupported) return;
+    if (!state.callActive || state.speechUnsupported) return;
     if (!speechRecognizer) { initSpeechRecognition(); return; }
     try {
       speechRecognizer.lang = state.speakLang;
       if (isRecognitionRunning) speechRecognizer.stop();
       // o onend reinicia sozinho; se não reiniciar em 1,2s, forçamos
-      setTimeout(() => {
-        if (!isRecognitionRunning && !state.isMuted && !state.speechBlocked && speechRecognizer) {
+      clearTimeout(speechRestartTimer);
+      speechRestartTimer = setTimeout(() => {
+        if (state.callActive && !isRecognitionRunning && !state.isMuted && !state.speechBlocked && speechRecognizer) {
           try { speechRecognizer.lang = state.speakLang; speechRecognizer.start(); } catch(e) {}
         }
       }, 1200);
@@ -2774,33 +2850,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  const TRANSLATION_ERROR = 'Tradução indisponível. O texto original está abaixo; tente novamente.';
+
+  function decodeTranslation(text) {
+    const entities = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ' };
+    return String(text)
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+      .replace(/&(amp|quot|apos|lt|gt|nbsp);/g, (_, name) => entities[name]);
+  }
+
   async function translateText(text, fromLang, toLang) {
+    const original = String(text || '').trim();
     const src = (fromLang || 'auto').split('-')[0].toLowerCase();
     const tgt = (toLang || 'pt').split('-')[0].toLowerCase();
+    if (!original) return null;
+    if (src === tgt && src !== 'auto') return original;
 
-    if (src === tgt && src !== 'auto') return text;
-
-    // Motor único: Google Translate (grátis, sem chave). Medido em ~1,1s.
     try {
-      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${src}&tl=${tgt}&dt=t&q=${encodeURIComponent(text)}`;
+      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${src}&tl=${tgt}&dt=t&q=${encodeURIComponent(original)}`;
       const gRes = await fetchWithTimeout(gUrl, 4000);
       if (gRes && gRes.ok) {
         const gJson = await gRes.json();
-        if (gJson && gJson[0]) return gJson[0].map(item => item[0]).join('');
+        const translated = Array.isArray(gJson?.[0])
+          ? gJson[0].map(item => item && item[0]).join('').trim()
+          : '';
+        if (translated) return translated;
       }
     } catch (e) {}
 
-    // Reserva: só se o Google não responder (instabilidade da rede)
-    try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}`;
-      const res = await fetchWithTimeout(url, 5000);
-      if (res && res.ok) {
-        const data = await res.json();
-        if (data.responseData?.translatedText) return data.responseData.translatedText;
-      }
-    } catch (e) {}
+    if (src !== 'auto' && original.length <= 500) {
+      try {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(original)}&langpair=${src}|${tgt}`;
+        const res = await fetchWithTimeout(url, 5000);
+        if (res && res.ok) {
+          const data = await res.json();
+          const translated = decodeTranslation(data.responseData?.translatedText || '').trim();
+          if (String(data.responseStatus) === '200' && translated) return translated;
+        }
+      } catch (e) {}
+    }
 
-    return text;
+    return null;
+  }
+
+  async function translateForTarget(text, fromLang, targetLang) {
+    const translated = await translateText(text, fromLang, targetLang);
+    const failed = !translated;
+    return { translated: failed ? null : translated, failed, targetLang };
   }
 
   // Fila de traduções: cada trecho traduz na hora, em paralelo.
@@ -2810,49 +2906,50 @@ document.addEventListener('DOMContentLoaded', () => {
   const speechPending = new Map();
 
   async function handleRemoteSpeech(data) {
+    if (!state.callActive) return;
+    const roomId = state.roomId;
     triggerSpeakingWave(false);
-
-    // O TEXTO ORIGINAL aparece na hora, sem esperar a tradução.
-    // Antes a tela ficava 1,5-2s só com "Traduzindo..." e parecia travada.
-    showRemoteCaption(data.sender || 'Colega', data.text, data.translated || '…');
+    showRemoteCaption(data.sender || 'Colega', data.text, 'Traduzindo…');
 
     const seq = ++speechSeq;
-    const translated = data.translated || await translateText(data.text, data.lang, state.targetLang);
-    speechPending.set(seq, { data, translated });
+    const result = await translateForTarget(data.text, data.lang, state.targetLang);
+    if (!state.callActive || state.roomId !== roomId) return;
+    speechPending.set(seq, { data, result });
 
-    // mostra em ordem: se um trecho anterior ainda está voltando, segura este
     while (speechPending.has(speechRendered + 1)) {
       const next = speechPending.get(speechRendered + 1);
       speechPending.delete(speechRendered + 1);
       speechRendered++;
-      renderRemoteSpeech(next.data, next.translated);
+      renderRemoteSpeech(next.data, next.result);
     }
 
-    diag.lastTranslateOk = !!translated;
+    diag.lastTranslateOk = !result.failed;
     diag.lastTranslateFrom = data.lang || '?';
-    diag.lastTranslateTo = state.targetLang;
+    diag.lastTranslateTo = result.targetLang;
     diag.lastTranslateAt = Date.now();
     diag.lastRemoteAt = Date.now();
     diag.lastRemoteText = data.text || '';
-    diag.lastRemoteTranslated = translated || '';
+    diag.lastRemoteTranslated = result.translated || '';
     updateVoiceDiag();
-
   }
 
-  function renderRemoteSpeech(data, translated) {
-    showRemoteCaption(data.sender || 'Colega', data.text, translated);
-    addLiveCaption(data.sender || 'Colega', data.text, translated, false);
+  function renderRemoteSpeech(data, result) {
+    const speaker = (data.sender || 'Colega') + (data.forceSpeech ? ' (Voz)' : '');
+    const displayed = result.failed ? TRANSLATION_ERROR : result.translated;
+    showRemoteCaption(speaker, data.text, displayed);
+    addLiveCaption(speaker, data.text, displayed, false);
     setTimeout(playSoftBeep, 0);
 
-    if (state.ttsEnabled) {
-      speakText(translated, state.targetLang);
+    if (!result.failed && (state.ttsEnabled || data.forceSpeech)) {
+      speakText(result.translated, result.targetLang);
     }
 
     addTranscriptItem({
-      sender: data.sender || 'Colega',
+      sender: speaker,
       isSelf: false,
       original: data.text,
-      translated: translated,
+      translated: result.translated,
+      translationError: result.failed ? TRANSLATION_ERROR : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
   }
@@ -2869,24 +2966,52 @@ document.addEventListener('DOMContentLoaded', () => {
         || null;
   }
 
-  function speakText(text, langCode) {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = langCode || 'pt-BR';
+  const speechQueue = [];
+  let currentUtterance = null;
+  let speechQueueGeneration = 0;
+
+  function cancelQueuedSpeech() {
+    speechQueueGeneration++;
+    speechQueue.length = 0;
+    currentUtterance = null;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  function processSpeechQueue() {
+    if (currentUtterance || !speechQueue.length || !('speechSynthesis' in window)) return;
+    const item = speechQueue.shift();
+    const generation = speechQueueGeneration;
+    const utterance = new SpeechSynthesisUtterance(item.text.slice(0, 500));
+    currentUtterance = utterance;
+    utterance.lang = item.langCode || 'pt-BR';
     const voice = pickVoice(utterance.lang);
     if (voice) utterance.voice = voice;
     utterance.rate = 1;
     utterance.pitch = 1;
+    const finish = () => {
+      if (generation !== speechQueueGeneration || currentUtterance !== utterance) return;
+      currentUtterance = null;
+      processSpeechQueue();
+    };
+    utterance.onend = finish;
     utterance.onerror = (e) => {
+      if (generation !== speechQueueGeneration) return;
       diag.voiceError = (e && e.error) || 'erro';
       updateVoiceDiag();
+      finish();
     };
     diag.lastSpokenLang = utterance.lang;
     diag.lastSpokenVoice = voice ? voice.name : 'padrão do sistema';
     diag.lastSpokenAt = Date.now();
-    try { window.speechSynthesis.speak(utterance); } catch (e) { diag.voiceError = 'não iniciou'; }
+    try { window.speechSynthesis.speak(utterance); } catch (e) { diag.voiceError = 'não iniciou'; finish(); }
     updateVoiceDiag();
+  }
+
+  function speakText(text, langCode) {
+    if (!text || !('speechSynthesis' in window)) return;
+    if (speechQueue.length >= 20) speechQueue.shift();
+    speechQueue.push({ text: String(text), langCode });
+    processSpeechQueue();
   }
   if ('speechSynthesis' in window) {
     window.speechSynthesis.onvoiceschanged = () => updateVoiceDiag();
@@ -2953,14 +3078,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!inputChatFallback) return;
     const text = inputChatFallback.value.trim();
     if (!text) return;
-    inputChatFallback.value = '';
-
-    sendData({
+    const sent = sendData({
       type: 'chat',
       sender: state.userName,
       text: text,
       lang: state.speakLang
     });
+    if (!sent) {
+      showNotification('Colega desconectado. A mensagem não foi enviada.');
+      return;
+    }
+    inputChatFallback.value = '';
 
     addTranscriptItem({
       sender: state.userName,
@@ -2976,15 +3104,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function handleIncomingChat(data) {
-    const translated = await translateText(data.text, data.lang, state.targetLang);
-    showRemoteCaption(data.sender || 'Colega', data.text, translated);
-    addLiveCaption(data.sender || 'Colega', data.text, translated, false);
+    const roomId = state.roomId;
+    showRemoteCaption(data.sender || 'Colega', data.text, 'Traduzindo…');
+    const result = await translateForTarget(data.text, data.lang, state.targetLang);
+    if (!state.callActive || state.roomId !== roomId) return;
+    const displayed = result.failed ? TRANSLATION_ERROR : result.translated;
+    showRemoteCaption(data.sender || 'Colega', data.text, displayed);
+    addLiveCaption(data.sender || 'Colega', data.text, displayed, false);
     playSoftBeep();
     addTranscriptItem({
       sender: data.sender || 'Colega',
       isSelf: false,
       original: data.text,
-      translated: translated,
+      translated: result.translated,
+      translationError: result.failed ? TRANSLATION_ERROR : null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
   }
@@ -3064,7 +3197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-100 flex items-center justify-center transition active:scale-95';
       if (iconMic) iconMic.setAttribute('data-lucide', 'mic');
-      if (speechRecognizer && !isRecognitionRunning) {
+      if (state.callActive && speechRecognizer && !isRecognitionRunning) {
         try { speechRecognizer.start(); } catch(e) {}
       }
     }
@@ -3163,16 +3296,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateTTSButton() {
+    if (!btnToggleTTS) return;
+    btnToggleTTS.className = state.ttsEnabled
+      ? 'w-11 h-11 rounded-full bg-ok-600/20 text-ok-300 border border-ok-500/30 flex items-center justify-center transition active:scale-95'
+      : 'w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-300 flex items-center justify-center transition active:scale-95';
+    btnToggleTTS.title = state.ttsEnabled ? 'Desativar leitura da tradução' : 'Ouvir a tradução por voz';
+    btnToggleTTS.setAttribute('aria-pressed', String(state.ttsEnabled));
+    const icon = document.getElementById('iconTTS');
+    if (icon) icon.setAttribute('data-lucide', state.ttsEnabled ? 'volume-2' : 'volume-x');
+    try { if (window.lucide) lucide.createIcons(); } catch (e) {}
+  }
+
   on(btnToggleTTS, 'click', () => {
     state.ttsEnabled = !state.ttsEnabled;
-    if (state.ttsEnabled) {
-      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-ok-600/20 text-ok-300 border border-ok-500/30 flex items-center justify-center transition active:scale-95';
-      showNotification('Voz sintetizada ativada');
-    } else {
-      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 flex items-center justify-center transition active:scale-95';
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-      showNotification('Voz sintetizada desativada');
-    }
+    if (!state.ttsEnabled) cancelQueuedSpeech();
+    updateTTSButton();
+    showNotification(state.ttsEnabled ? 'Voz sintetizada ativada' : 'Voz sintetizada desativada');
   });
 
   function buildInviteUrl() {
@@ -3211,37 +3351,100 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function cleanupAndExitCall(silent = false) {
-    stopScreenShare();
-    stopSecondCamera();
-    stopRecording();
-    stopNetworkMonitor();
-    clearInterval(state.timerInterval);
+    if (!state.callActive) return;
+    if (!silent) sendData({ type: 'call_end' });
 
     const duration = callTimerDisplay ? callTimerDisplay.textContent : '00:00';
     saveCallToArchive(state.roomId, duration, state.transcriptHistory);
     saveCallNotes(state.roomId);
 
-    if (speechRecognizer) {
-      try { speechRecognizer.stop(); } catch(e) {}
-    }
-    if (state.localStream) {
-      state.localStream.getTracks().forEach(track => track.stop());
-    }
-    if (state.call) state.call.close();
-    if (state.dataConnection) state.dataConnection.close();
-    if (state.peer) state.peer.destroy();
+    state.callActive = false;
+    clearReconnectTimers();
+    clearTimeout(speechRestartTimer);
+    clearTimeout(speechBuffer.timer);
+    clearTimeout(state.typingStopTimer);
+    clearTimeout(localCaptionTimeout);
+    clearTimeout(remoteCaptionTimeout);
+    clearTimeout(window.localWaveTimer);
+    clearTimeout(window.remoteWaveTimer);
+    speechBuffer.text = '';
+    speechPending.clear();
+    cancelQueuedSpeech();
+    closeSafeMic();
+    stopDiagMeter();
+    document.getElementById('voiceDiagModal')?.classList.add('hidden');
 
+    if (speechRecognizer) {
+      speechRecognizer.onstart = null;
+      speechRecognizer.onresult = null;
+      speechRecognizer.onerror = null;
+      speechRecognizer.onend = null;
+      try { speechRecognizer.abort(); } catch (e) {}
+      speechRecognizer = null;
+    }
+    isRecognitionRunning = false;
+    diag.isListening = false;
+
+    stopScreenShare();
+    stopSecondCamera();
+    stopRecording();
+    stopNetworkMonitor();
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+
+    if (state.localStream) state.localStream.getTracks().forEach(track => track.stop());
+    if (state.remoteStream) state.remoteStream.getTracks().forEach(track => track.stop());
+    if (safeMic.stream) safeMic.stream.getTracks().forEach(track => track.stop());
+    safeMic.stream = null;
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) {
+      remoteVideo.srcObject = null;
+      remoteVideo.classList.add('hidden');
+    }
+
+    detachConnection(state.call);
+    detachConnection(state.dataConnection);
+    if (state.peer && !state.peer.destroyed) state.peer.destroy();
+
+    state.call = null;
+    state.dataConnection = null;
+    state.peer = null;
+    state.localStream = null;
+    state.remoteStream = null;
     state.roomId = null;
+    state.callStartTime = null;
+    state.hasConnectedBefore = false;
+    state.remotePeerId = null;
     state.isReconnecting = false;
     state.reconnectAttempts = 0;
+    state.isMuted = false;
+    state.ttsEnabled = false;
+    state.isTypingSent = false;
+    state.transcriptHistory = [];
+    state.savedVocab = [];
+    if (callTimerDisplay) callTimerDisplay.textContent = '00:00';
+    if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-100 flex items-center justify-center transition active:scale-95';
+    if (iconMic) iconMic.setAttribute('data-lucide', 'mic');
+    if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Aguardando colega...';
+    if (remoteUserAvatar) remoteUserAvatar.textContent = 'C';
+    if (remoteLangBadge) remoteLangBadge.textContent = '--';
+    if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Desconectado';
+    if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
+    if (localAudioWave) localAudioWave.classList.add('hidden');
+    if (remoteAudioWave) remoteAudioWave.classList.add('hidden');
+    hideRemoteCaption();
     showTypingIndicator(false);
+    updateTTSButton();
+    try { if (window.lucide) lucide.createIcons(); } catch (e) {}
 
     if (mainHeader) mainHeader.classList.remove('hidden');
     if (callScreen) callScreen.classList.add('hidden');
     if (lobbyScreen) lobbyScreen.classList.remove('hidden');
     updateConnectionBadge('Desconectado', 'ready');
+    updateListenStatusBar();
     window.history.pushState({}, '', window.location.pathname);
     if (!silent) showNotification('Reunião finalizada e salva em "Reuniões"!');
+    if (pendingAppReload) setTimeout(() => window.location.reload(), 300);
   }
 
   // ==========================================

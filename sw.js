@@ -3,7 +3,7 @@
  * Desenvolvido por Kaynan Monteiro
  */
 
-const CACHE_NAME = 'linguacall-cache-v17';
+const CACHE_NAME = 'linguacall-cache-v18';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -58,7 +58,8 @@ self.addEventListener('fetch', (event) => {
     }).catch(() => {
       return caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) return cachedResponse;
-        return caches.match('./index.html');
+        if (event.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
       });
     })
   );
