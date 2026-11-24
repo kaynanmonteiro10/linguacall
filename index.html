@@ -295,6 +295,10 @@
               <i data-lucide="notebook-pen" class="w-3.5 h-3.5"></i>
             </button>
 
+            <button id="btnTestMicInCall" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-emerald-300 transition" title="Testar meu microfone">
+              <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+            </button>
+
             <!-- Selo de status da conexão -->
             <div id="connectionStatusBadge" class="hidden px-2 py-0.5 rounded-full text-[11px] border border-slate-700 bg-slate-800 text-slate-300 items-center gap-1 flex">
               <span id="connectionStatusText">Pronto</span>
@@ -398,7 +402,8 @@
             </button>
 
             <!-- Botão Copiar Convite -->
-            <button id="btnCopyInvite" class="px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs flex items-center gap-1 transition" title="Copiar convite">
+            <!-- Convite e histórico: escondidos no celular para não empurrar os controles -->
+            <button id="btnCopyInvite" class="hidden sm:flex px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs items-center gap-1 transition" title="Copiar convite">
               <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
               <span class="hidden sm:inline">Convidar</span>
             </button>
@@ -494,7 +499,7 @@
         </div>
 
         <!-- BLOCO DE NOTAS RÁPIDAS DURANTE A CHAMADA -->
-        <div id="callNotesPanel" class="hidden w-full md:w-80 flex-shrink-0 bg-slate-900 border-t md:border-t-0 md:border-l border-amber-500/30 flex flex-col min-h-0 z-30">
+        <div id="callNotesPanel" class="hidden w-full md:w-80 flex-1 md:flex-none flex-shrink-0 bg-slate-900 border-t md:border-t-0 md:border-l border-amber-500/30 flex flex-col min-h-0 z-30">
           <div class="p-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 flex-shrink-0">
             <span class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
               <i data-lucide="notebook-pen" class="w-3.5 h-3.5"></i>
@@ -515,7 +520,7 @@
         </div>
 
         <!-- BARRA RÁPIDA DE REAÇÕES (EMOJIS) -->
-        <div class="h-8 bg-slate-950/90 border-t border-slate-800/60 px-4 flex items-center justify-center gap-4 text-sm flex-shrink-0 z-30">
+        <div class="h-7 sm:h-8 bg-slate-950/90 border-t border-slate-800/60 px-4 flex items-center justify-center gap-4 text-sm flex-shrink-0 z-30">
           <button class="btnReaction hover:scale-125 transition" data-emoji="👏">👏</button>
           <button class="btnReaction hover:scale-125 transition" data-emoji="👍">👍</button>
           <button class="btnReaction hover:scale-125 transition" data-emoji="❤️">❤️</button>
@@ -524,18 +529,18 @@
           <button class="btnReaction hover:scale-125 transition" data-emoji="🔥">🔥</button>
         </div>
 
-        <!-- BARRA DE CONTROLES INFERIOR -->
-        <div class="h-16 border-t border-slate-800 bg-slate-950 px-3 sm:px-6 flex items-center justify-between flex-shrink-0 z-30">
+        <!-- BARRA DE CONTROLES INFERIOR (fixa no rodapé no celular) -->
+        <div class="h-16 border-t border-slate-800 bg-slate-950 px-2 sm:px-6 flex items-center justify-between flex-shrink-0 z-30">
           <div class="flex items-center gap-1.5 sm:gap-2.5">
-            <button id="btnToggleMic" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Microfone">
+            <button id="btnToggleMic" class="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Microfone">
               <i data-lucide="mic" id="iconMic" class="w-5 h-5 text-white"></i>
             </button>
 
-            <button id="btnToggleCamera" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Câmera">
+            <button id="btnToggleCamera" class="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Câmera">
               <i data-lucide="video" id="iconCamera" class="w-5 h-5 text-white"></i>
             </button>
 
-            <button id="btnFlipCamera" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Virar Câmera">
+            <button id="btnFlipCamera" class="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Virar Câmera">
               <i data-lucide="switch-camera" class="w-5 h-5"></i>
             </button>
 
@@ -543,15 +548,19 @@
               <i data-lucide="monitor-up" class="w-5 h-5"></i>
             </button>
 
-            <button id="btnToggleTTS" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center border border-slate-700 transition active:scale-95" title="Ouvir Tradução por Voz">
+            <button id="btnToggleTTS" class="hidden sm:flex w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 items-center justify-center border border-slate-700 transition active:scale-95" title="Ouvir Tradução por Voz">
               <i data-lucide="volume-2" id="iconTTS" class="w-5 h-5"></i>
             </button>
           </div>
 
-          <div>
-            <button id="btnEndCall" class="px-5 py-2.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-rose-600/30 transition active:scale-95">
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <button id="btnToggleDrawerChatBar" class="md:hidden relative w-10 h-10 rounded-full bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center transition active:scale-95" title="Histórico e chat">
+              <i data-lucide="message-square" class="w-4 h-4"></i>
+              <span id="chatNotificationBadgeBar" class="hidden absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full"></span>
+            </button>
+            <button id="btnEndCall" class="px-3 sm:px-5 py-2.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-rose-600/30 transition active:scale-95" title="Encerrar chamada">
               <i data-lucide="phone-off" class="w-4 h-4"></i>
-              <span>Sair</span>
+              <span class="hidden xs:inline sm:inline">Sair</span>
             </button>
           </div>
         </div>
@@ -590,8 +599,18 @@
 
         <!-- Abas do Histórico (Conversa Normal vs Vocabulário Marcado) -->
         <div class="flex border-b border-slate-800 bg-slate-950/40 text-[11px] font-medium">
-          <button id="tabChatAll" class="flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400">Todas as Falas</button>
-          <button id="tabChatSaved" class="flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Vocabulário Salvo (<span id="savedVocabCount">0</span>)</button>
+          <button id="tabChatAll" class="flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400">Falas</button>
+          <button id="tabChatLive" class="flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Legendas ao vivo</button>
+          <button id="tabChatSaved" class="flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200">Salvos (<span id="savedVocabCount">0</span>)</button>
+        </div>
+
+        <!-- PAINEL: LEGENDAS AO VIVO (funciona também no iPhone) -->
+        <div id="liveCaptionPanel" class="hidden flex-1 p-3 overflow-y-auto space-y-2 text-xs min-h-0">
+          <div id="liveCaptionList" class="space-y-2"></div>
+          <div id="liveCaptionEmpty" class="text-center py-8 text-slate-500">
+            <i data-lucide="captions" class="w-6 h-6 mx-auto mb-1.5 opacity-40"></i>
+            <p>As falas traduzidas aparecem aqui em tempo real.<br><br>No iPhone, o reconhecimento de voz do navegador não existe: por isso o texto é lido pela sua digitação ou pelo botão "Falar meu texto traduzido".</p>
+          </div>
         </div>
 
         <div id="transcriptList" class="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs scroll-smooth min-h-0">

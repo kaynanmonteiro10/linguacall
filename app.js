@@ -250,15 +250,37 @@ document.addEventListener('DOMContentLoaded', () => {
     state.activeTab = 'all';
     tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
     tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
-    renderTranscriptList();
+    document.getElementById('tabChatLive').className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    switchChatPanel();
   });
 
   on(tabChatSaved, 'click', () => {
     state.activeTab = 'saved';
     tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
     tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
-    renderTranscriptList();
+    document.getElementById('tabChatLive').className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    switchChatPanel();
   });
+
+  on('tabChatLive', 'click', () => {
+    state.activeTab = 'live';
+    document.getElementById('tabChatLive').className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
+    tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    switchChatPanel();
+  });
+
+  function switchChatPanel() {
+    const livePanel = document.getElementById('liveCaptionPanel');
+    if (state.activeTab === 'live') {
+      transcriptList?.classList.add('hidden');
+      livePanel?.classList.remove('hidden');
+    } else {
+      livePanel?.classList.add('hidden');
+      transcriptList?.classList.remove('hidden');
+      renderTranscriptList();
+    }
+  }
 
   function toggleSaveVocab(idx) {
     const item = state.transcriptHistory[idx];
@@ -360,6 +382,54 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       document.exitFullscreen().catch(() => {});
     }
+  });
+
+  // Botão de teste do microfone DENTRO da chamada (útil quando o colega não ouve)
+  on('btnTestMicInCall', 'click', async () => {
+    if (!state.localStream) {
+      showNotification('Microfone não está ativo. Saia e entre de novo liberando o microfone.');
+      return;
+    }
+    const track = state.localStream.getAudioTracks()[0];
+    if (!track) {
+      showNotification('Nenhuma faixa de áudio encontrada.');
+      return;
+    }
+
+    // 1) Volume real captado pelo microfone
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = ctx.createAnalyser();
+      ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+      analyser.fftSize = 64;
+      const arr = new Uint8Array(analyser.frequencyBinCount);
+      let peak = 0;
+      let ticks = 0;
+      showNotification('Fale algo: medindo o microfone...');
+      const timer = setInterval(() => {
+        analyser.getByteFrequencyData(arr);
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) sum += arr[i];
+        peak = Math.max(peak, sum / arr.length);
+        if (++ticks >= 20) {
+          clearInterval(timer);
+          ctx.close().catch(() => {});
+          if (peak < 6) {
+            alert('O microfone está captando quase nada.\n\nVerifique: 1) se o microfone está mutado; 2) se outro app está usando o microfone; 3) a permissão do microfone no navegador.');
+          } else {
+            showNotification('Microfone OK! O problema pode estar no áudio do colega.');
+          }
+        }
+      }, 100);
+    } catch (e) {}
+
+    // 2) Estado das faixas que estão sendo enviadas
+    const audioTracks = state.localStream.getAudioTracks();
+    const muted = state.isMuted || audioTracks.some(t => !t.enabled);
+    const live = audioTracks.some(t => t.readyState === 'live');
+    if (muted) showNotification('Atenção: seu microfone está MUTADO.');
+    else if (!live) showNotification('Atenção: a faixa de áudio caiu. Saia e entre de novo.');
+    else showNotification('Microfone ligado e enviando áudio.');
   });
 
   on('btnSpeakMyText', 'click', async () => {
@@ -970,12 +1040,17 @@ document.addEventListener('DOMContentLoaded', () => {
     state.isChatDrawerOpen = false;
     updateChatDrawerUI();
   });
+  on('btnToggleDrawerChatBar', 'click', () => {
+    state.isChatDrawerOpen = !state.isChatDrawerOpen;
+    updateChatDrawerUI();
+  });
 
   function updateChatDrawerUI() {
     if (!chatDrawer) return;
     if (state.isChatDrawerOpen) {
       chatDrawer.classList.remove('translate-x-full');
       chatNotificationBadge?.classList.add('hidden');
+      document.getElementById('chatNotificationBadgeBar')?.classList.add('hidden');
     } else {
       chatDrawer.classList.add('translate-x-full');
     }
@@ -1176,35 +1251,81 @@ document.addEventListener('DOMContentLoaded', () => {
   // OBTENÇÃO DE ÁUDIO E CÂMERA
   // ==========================================
 
+  // Mensagem de erro que diz o que realmente aconteceu (e como resolver)
+  function explainMediaError(err, wantsVideo) {
+    const name = (err && err.name) || 'Error';
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+      return isIOS
+        ? 'O iPhone bloqueou o microfone/câmera para este site.\n\nComo liberar no iPhone:\n1) Toque no ícone "aA" ou no cadeado ao lado do endereço;\n2) Toque em "Ajustes do Site" e permita Microfone e Câmera;\n3) Em Ajustes do iPhone > Safari > Microfone, escolha "Perguntar" ou "Permitir";\n4) Recarregue a página e entre de novo.\n\nSe estiver usando um atalho do Instagram/Facebook/WhatsApp, abra o link no Safari.'
+        : 'O navegador bloqueou o microfone/câmera para este site.\n\nToque no cadeado ao lado do endereço, permita Microfone e Câmera e recarregue a página.';
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      return wantsVideo
+        ? 'Não encontrei câmera/microfone neste aparelho. Vou tentar entrar apenas com áudio.'
+        : 'Não encontrei um microfone neste aparelho.';
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+      return 'A câmera ou o microfone está sendo usado por outro aplicativo (ou outra aba).\n\nFeche o outro app/aba, recarregue e tente de novo.';
+    }
+    if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+      return 'Este aparelho não aceitou as configurações de vídeo. Vou tentar com uma configuração mais simples.';
+    }
+    return 'Não foi possível abrir o microfone (' + name + '). Recarregue a página e tente de novo.';
+  }
+
+  function showMediaErrorOnce(err, wantsVideo) {
+    const key = (err && err.name) || 'Error';
+    if (state.lastMediaErrorKey === key) return;
+    state.lastMediaErrorKey = key;
+    showNotification(explainMediaError(err, wantsVideo).split('\n')[0]);
+    setTimeout(() => {
+      if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+        alert(explainMediaError(err, wantsVideo));
+      }
+    }, 60);
+  }
+
   async function requestUserMedia(wantVideo = true, facingMode = 'user') {
     stopMicTest();
 
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Este navegador não libera câmera/microfone nesta página.\n\nNo iPhone, abra o link no Safari (não dentro do Instagram, Facebook ou WhatsApp) e em HTTPS.');
+      throw new Error('getUserMedia indisponível');
+    }
+
+    // Tentativa 1: vídeo simples (facingMode exato pode falhar no iPhone)
     if (wantVideo) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         state.localStream = stream;
         state.isVideoEnabled = true;
         state.currentFacingMode = facingMode;
+        state.lastMediaErrorKey = null;
         setupLocalVideoStream(stream);
         return stream;
       } catch (err) {
-        console.warn('Erro ao obter câmera com vídeo, tentando áudio:', err);
+        console.warn('Falha vídeo+áudio (1/3):', err && err.name);
+        state.lastMediaErrorKey = null;
+        showMediaErrorOnce(err, true);
+        // Se a permissão foi negada, não adianta tentar só áudio: pede de novo com áudio puro
+        // (no iOS o áudio costuma ser liberado mesmo quando o vídeo falha).
       }
     }
 
+    // Tentativa 2: apenas áudio
     try {
       const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       state.localStream = audioStream;
       state.isVideoEnabled = false;
       if (localVideo) localVideo.classList.add('hidden');
       if (localAvatarBox) localAvatarBox.classList.remove('hidden');
+      state.lastMediaErrorKey = null;
       return audioStream;
     } catch (err) {
-      console.error('Falha de microfone:', err);
-      alert('O navegador não autorizou o microfone. Abra pelo link do GitHub Pages (com HTTPS) para liberar.');
+      console.error('Falha de microfone:', err && err.name);
+      showMediaErrorOnce(err, false);
       throw err;
     }
   }
@@ -1239,8 +1360,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (localUserAvatar) localUserAvatar.textContent = (state.userName[0] || 'V').toUpperCase();
     if (localLangBadge) localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
 
+    // No celular, o painel do chat começa fechado para os controles aparecerem
+    if (window.innerWidth < 768) {
+      state.isChatDrawerOpen = false;
+      updateChatDrawerUI();
+    }
+
     // Notas desta chamada (por sala)
     loadCallNotes(roomId);
+    clearLiveCaptions();
+    state.activeTab = 'live';
+    switchChatPanel();
     if (callNotesPanel) callNotesPanel.classList.add('hidden');
     document.getElementById('btnCallNotes')?.classList.remove('text-amber-300');
     setNetworkUI(null);
@@ -1692,7 +1822,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      // iPhone/Safari não têm reconhecimento de voz: avisa e segue com o chat + tradução
+      state.speechUnsupported = true;
+      showNotification('Este navegador não reconhece voz. Use o chat ou o botão "Falar meu texto".');
+      return;
+    }
 
     speechRecognizer = new SpeechRecognition();
     speechRecognizer.continuous = true;
@@ -1755,6 +1890,39 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try { speechRecognizer.start(); } catch(e) {}
+  }
+
+  // ==========================================
+  // PAINEL DE LEGENDAS AO VIVO (funciona em qualquer aparelho)
+  // ==========================================
+  const liveCaptionList = document.getElementById('liveCaptionList');
+  let liveCaptionPanel = document.getElementById('liveCaptionPanel');
+  const liveCaptionEmpty = document.getElementById('liveCaptionEmpty');
+
+  function addLiveCaption(speaker, original, translated, isSelf) {
+    if (!liveCaptionList) return;
+    if (liveCaptionEmpty) liveCaptionEmpty.classList.add('hidden');
+    const row = document.createElement('div');
+    row.className = 'p-2 rounded-xl border ' + (isSelf
+      ? 'bg-indigo-950/50 border-indigo-900/60'
+      : 'bg-slate-950/80 border-emerald-900/50');
+    row.innerHTML = `
+      <div class="flex items-center justify-between mb-0.5">
+        <span class="font-bold ${isSelf ? 'text-indigo-400' : 'text-emerald-400'}">${escapeHtml(speaker)}</span>
+        <span class="text-[10px] text-slate-500">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+      <div class="text-white leading-snug">${escapeHtml(translated || original || '')}</div>
+      ${original && translated && original !== translated
+        ? `<div class="text-[10px] text-slate-400 italic mt-0.5">Original: ${escapeHtml(original)}</div>` : ''}
+    `;
+    liveCaptionList.appendChild(row);
+    while (liveCaptionList.children.length > 120) liveCaptionList.removeChild(liveCaptionList.firstChild);
+    liveCaptionPanel.scrollTop = liveCaptionPanel.scrollHeight;
+  }
+
+  function clearLiveCaptions() {
+    if (liveCaptionList) liveCaptionList.innerHTML = '';
+    if (liveCaptionEmpty) liveCaptionEmpty.classList.remove('hidden');
   }
 
   function showLocalCaption(text) {
@@ -1851,6 +2019,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const translated = await translateText(data.text, data.lang, state.targetLang);
 
     showRemoteCaption(data.sender || 'Colega', data.text, translated);
+    addLiveCaption(data.sender || 'Colega', data.text, translated, false);
     playSoftBeep();
 
     if (state.ttsEnabled) {
@@ -1882,8 +2051,9 @@ document.addEventListener('DOMContentLoaded', () => {
     state.transcriptHistory.push(item);
     renderTranscriptList();
 
-    if (!state.isChatDrawerOpen && chatNotificationBadge) {
-      chatNotificationBadge.classList.remove('hidden');
+    if (!state.isChatDrawerOpen) {
+      chatNotificationBadge?.classList.remove('hidden');
+      document.getElementById('chatNotificationBadgeBar')?.classList.remove('hidden');
     }
   }
 
@@ -1950,6 +2120,7 @@ document.addEventListener('DOMContentLoaded', () => {
       translated: null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
+    addLiveCaption(state.userName, text, text, true);
 
     state.isTypingSent = false;
     sendData({ type: 'typing', isTyping: false });
@@ -1958,6 +2129,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function handleIncomingChat(data) {
     const translated = await translateText(data.text, data.lang, state.targetLang);
     showRemoteCaption(data.sender || 'Colega', data.text, translated);
+    addLiveCaption(data.sender || 'Colega', data.text, translated, false);
     playSoftBeep();
     addTranscriptItem({
       sender: data.sender || 'Colega',
@@ -2187,7 +2359,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // BLOCO DE NOTAS DURANTE A CHAMADA
   // ==========================================
-  const callNotesPanel = document.getElementById('callNotesPanel');
+  let callNotesPanel = document.getElementById('callNotesPanel');
   const callNotesText = document.getElementById('callNotesText');
   const callNotesStatus = document.getElementById('callNotesStatus');
 
@@ -2216,6 +2388,8 @@ document.addEventListener('DOMContentLoaded', () => {
     callNotesPanel.classList.toggle('hidden', !willOpen);
     document.getElementById('btnCallNotes')?.classList.toggle('text-amber-300', willOpen);
     if (willOpen) {
+      if (window.innerWidth < 768) state.isChatDrawerOpen = false;
+      updateChatDrawerUI();
       loadCallNotes(state.roomId);
       setTimeout(() => callNotesText?.focus(), 60);
     }
