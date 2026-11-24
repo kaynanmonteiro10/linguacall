@@ -3,13 +3,15 @@
  * Desenvolvido por Kaynan Monteiro
  */
 
-const CACHE_NAME = 'linguacall-cache-v1';
+const CACHE_NAME = 'linguacall-cache-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './manifest.json',
+  './favicon.ico',
+  './favicon.png',
   './icon-192.png',
   './icon-512.png'
 ];

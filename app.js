@@ -1,7 +1,7 @@
 /**
  * LinguaCall Pro - Conexão WebRTC com Grade Desktop & Mobile,
- * PWA Service Worker, Filtros de Câmera, Controle de Volume, Tela Cheia,
- * Síntese de Fala Push-to-Talk e Créditos para Kaynan Monteiro.
+ * PWA Service Worker, Vocabulário Salvo, Beep Sonoro, Temas Visuais,
+ * Filtros de Câmera, Controle de Volume, Tela Cheia e Créditos para Kaynan Monteiro.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // REGISTRO DE SERVICE WORKER & PWA INSTALL
+  // PWA REGISTRO & INSTALL
   // ==========================================
   let deferredPrompt = null;
   const btnInstallPwa = document.getElementById('btnInstallPwa');
@@ -113,11 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRecordCall = document.getElementById('btnRecordCall');
   const iconRecord = document.getElementById('iconRecord');
 
-  // Gaveta de Chat
+  // Gaveta de Chat e Abas de Vocabulário
   const chatDrawer = document.getElementById('chatDrawer');
   const chatNotificationBadge = document.getElementById('chatNotificationBadge');
   const transcriptList = document.getElementById('transcriptList');
   const inputChatFallback = document.getElementById('inputChatFallback');
+  const tabChatAll = document.getElementById('tabChatAll');
+  const tabChatSaved = document.getElementById('tabChatSaved');
+  const savedVocabCount = document.getElementById('savedVocabCount');
 
   // Modais
   const settingsModal = document.getElementById('settingsModal');
@@ -125,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const viewSpecificCallModal = document.getElementById('viewSpecificCallModal');
   const statsModal = document.getElementById('statsModal');
   const filtersModal = document.getElementById('filtersModal');
-  const creatorModal = document.getElementById('creatorModal');
+  const aboutCreatorModal = document.getElementById('aboutCreatorModal');
   const savedCallsList = document.getElementById('savedCallsList');
 
   // Estado da Aplicação
@@ -136,6 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
     engine: localStorage.getItem('lc_engine') || 'mymemory',
     geminiKey: localStorage.getItem('lc_gemini_key') || '',
     autoRestartSpeech: true,
+    enableBeep: localStorage.getItem('lc_beep') !== 'false',
+    currentThemeIdx: 0,
+    activeTab: 'all', // 'all' ou 'saved'
     
     peer: null,
     call: null,
@@ -165,7 +171,9 @@ document.addEventListener('DOMContentLoaded', () => {
     callStartTime: null,
     timerInterval: null,
     
-    transcriptHistory: []
+    // HISTÓRICO ISOLADO DA CHAMADA ATUAL
+    transcriptHistory: [],
+    savedVocab: []
   };
 
   if (inputUserName) inputUserName.value = state.userName;
@@ -177,8 +185,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectTranslateEngine = document.getElementById('selectTranslateEngine');
   const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
   const geminiKeyContainer = document.getElementById('geminiKeyContainer');
+  const checkAudioBeep = document.getElementById('checkAudioBeep');
   if (selectTranslateEngine) selectTranslateEngine.value = state.engine;
   if (inputGeminiApiKey) inputGeminiApiKey.value = state.geminiKey;
+  if (checkAudioBeep) checkAudioBeep.checked = state.enableBeep;
   if (geminiKeyContainer && state.engine === 'gemini') geminiKeyContainer.classList.remove('hidden');
 
   applyMirrorSetting();
@@ -188,18 +198,127 @@ document.addEventListener('DOMContentLoaded', () => {
   if (roomFromUrl && inputRoomCode) inputRoomCode.value = roomFromUrl;
 
   // ==========================================
-  // MODAL SOBRE O CRIADOR (KAYNAN MONTEIRO)
+  // BEEP SONORO SUAVE (WEB AUDIO SYNTH)
   // ==========================================
-  function openCreatorModal() {
-    if (creatorModal) creatorModal.classList.remove('hidden');
+  function playSoftBeep() {
+    if (!state.enableBeep) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.16);
+    } catch(e) {}
   }
-  function closeCreatorModal() {
-    if (creatorModal) creatorModal.classList.add('hidden');
+
+  // ==========================================
+  // ALTERNADOR DE TEMAS VISUAIS
+  // ==========================================
+  const themes = [
+    { name: 'Dark Indigo', bodyClass: 'bg-slate-950 text-slate-100' },
+    { name: 'Cyberpunk Neon', bodyClass: 'bg-black text-cyan-200' },
+    { name: 'Midnight Emerald', bodyClass: 'bg-zinc-950 text-emerald-200' }
+  ];
+  on('btnToggleTheme', 'click', () => {
+    state.currentThemeIdx = (state.currentThemeIdx + 1) % themes.length;
+    const currentTheme = themes[state.currentThemeIdx];
+    document.body.className = `${currentTheme.bodyClass} h-screen w-screen flex flex-col font-sans antialiased overflow-hidden select-none`;
+    showNotification('Tema: ' + currentTheme.name);
+  });
+
+  // ==========================================
+  // ABAS DE HISTÓRICO & VOCABULÁRIO SALVO
+  // ==========================================
+  on(tabChatAll, 'click', () => {
+    state.activeTab = 'all';
+    tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
+    tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    renderTranscriptList();
+  });
+
+  on(tabChatSaved, 'click', () => {
+    state.activeTab = 'saved';
+    tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
+    tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    renderTranscriptList();
+  });
+
+  function toggleSaveVocab(idx) {
+    const item = state.transcriptHistory[idx];
+    if (!item) return;
+    item.isSaved = !item.isSaved;
+    updateSavedVocabCount();
+    renderTranscriptList();
+    showNotification(item.isSaved ? 'Frase salva no seu vocabulário!' : 'Frase removida do vocabulário.');
   }
-  on('btnOpenCreatorModal', 'click', openCreatorModal);
-  on('btnCreatorLinkFooter', 'click', openCreatorModal);
-  on('btnCloseCreatorModal', 'click', closeCreatorModal);
-  on('btnCloseCreatorModalBtn', 'click', closeCreatorModal);
+
+  function updateSavedVocabCount() {
+    const count = state.transcriptHistory.filter(m => m.isSaved).length;
+    if (savedVocabCount) savedVocabCount.textContent = count;
+  }
+
+  function renderTranscriptList() {
+    if (!transcriptList) return;
+    transcriptList.innerHTML = '';
+
+    const itemsToDisplay = state.activeTab === 'saved' 
+      ? state.transcriptHistory.filter(m => m.isSaved)
+      : state.transcriptHistory;
+
+    if (itemsToDisplay.length === 0) {
+      const msg = state.activeTab === 'saved'
+        ? 'Nenhuma frase favoritada ainda.<br>Clique no ícone de marcador nas falas para salvar expressões aqui.'
+        : 'Tudo o que for conversado e traduzido nesta chamada ficará gravado aqui.';
+      transcriptList.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">${msg}</div>`;
+      return;
+    }
+
+    itemsToDisplay.forEach((item, index) => {
+      const realIndex = state.transcriptHistory.indexOf(item);
+      const div = document.createElement('div');
+      div.className = `p-2.5 rounded-xl border ${
+        item.isSelf ? 'bg-indigo-950/40 border-indigo-900/60 ml-2' : 'bg-slate-950/70 border-slate-800 mr-2'
+      }`;
+
+      const senderColor = item.isSelf ? 'text-indigo-400' : 'text-emerald-400';
+      const mainText = item.isSelf ? item.original : (item.translated || item.original);
+      const subText = (!item.isSelf && item.translated) ? `Original: ${item.original}` : '';
+      const bookmarkColor = item.isSaved ? 'text-amber-400 fill-amber-400' : 'text-slate-500 hover:text-amber-400';
+
+      div.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span class="font-bold ${senderColor}">${escapeHtml(item.sender)}</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] text-slate-500">${item.timestamp}</span>
+            <button class="btnBookmarkVocab p-0.5 ${bookmarkColor} transition" data-idx="${realIndex}" title="Favoritar/Salvar Frase">
+              <i data-lucide="bookmark" class="w-3 h-3"></i>
+            </button>
+          </div>
+        </div>
+        <div class="text-slate-100 font-medium">${escapeHtml(mainText)}</div>
+        ${subText ? `<div class="text-[10px] text-slate-400 italic mt-0.5">${escapeHtml(subText)}</div>` : ''}
+      `;
+      transcriptList.appendChild(div);
+    });
+
+    try { lucide.createIcons(); } catch(e) {}
+
+    document.querySelectorAll('.btnBookmarkVocab').forEach(b => {
+      b.addEventListener('click', () => {
+        const idx = parseInt(b.dataset.idx);
+        toggleSaveVocab(idx);
+      });
+    });
+
+    transcriptList.scrollTop = transcriptList.scrollHeight;
+  }
 
   // ==========================================
   // VOLUME, FILTROS, TELA CHEIA E PUSH-TO-TALK
@@ -621,11 +740,11 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Nenhuma conversa nesta chamada para exportar em CSV.');
       return;
     }
-    let csv = `Horario,Participante,Texto Original,Texto Traduzido\n`;
+    let csv = `Horario,Participante,Texto Original,Texto Traduzido,Salvo no Vocabulario\n`;
     state.transcriptHistory.forEach(m => {
       const orig = `"${(m.original || '').replace(/"/g, '""')}"`;
       const trans = `"${(m.translated || m.original || '').replace(/"/g, '""')}"`;
-      csv += `${m.timestamp},"${m.sender}",${orig},${trans}\n`;
+      csv += `${m.timestamp},"${m.sender}",${orig},${trans},${m.isSaved ? 'Sim' : 'Nao'}\n`;
     });
     downloadBlob(csv, `reuniao-${state.roomId}.csv`, 'text/csv;charset=utf-8');
   });
@@ -742,11 +861,146 @@ document.addEventListener('DOMContentLoaded', () => {
   on('btnSaveSettings', 'click', () => {
     state.engine = selectTranslateEngine ? selectTranslateEngine.value : 'mymemory';
     state.geminiKey = inputGeminiApiKey ? inputGeminiApiKey.value.trim() : '';
+    state.enableBeep = checkAudioBeep ? checkAudioBeep.checked : true;
     localStorage.setItem('lc_engine', state.engine);
     localStorage.setItem('lc_gemini_key', state.geminiKey);
+    localStorage.setItem('lc_beep', state.enableBeep);
     settingsModal?.classList.add('hidden');
     showNotification('Configurações salvas!');
   });
+
+  // Modal Oficial do Criador Kaynan Monteiro
+  function openAboutCreator() {
+    if (aboutCreatorModal) {
+      aboutCreatorModal.classList.remove('hidden');
+      try { if (window.lucide) lucide.createIcons(); } catch(e) {}
+    }
+  }
+  function closeAboutCreator() {
+    if (aboutCreatorModal) aboutCreatorModal.classList.add('hidden');
+  }
+  on('btnOpenAboutCreator', 'click', openAboutCreator);
+  on('btnOpenCreatorDetails', 'click', openAboutCreator);
+  on('btnInCallAboutCreator', 'click', openAboutCreator);
+  on('btnCloseAboutCreatorModal', 'click', closeAboutCreator);
+  on('btnCloseAboutCreatorModalBtn', 'click', closeAboutCreator);
+
+  // Compartilhar App
+  on('btnShareAppModal', 'click', () => {
+    const shareData = {
+      title: 'LinguaCall Pro',
+      text: 'Conheça o LinguaCall Pro - Chamadas de vídeo gratuitas com tradução de voz em tempo real criada pelo desenvolvedor brasileiro Kaynan Monteiro!',
+      url: window.location.href
+    };
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      navigator.share(shareData).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        showNotification('Link do LinguaCall copiado!');
+      }).catch(() => {
+        prompt('Copie o link do app:', window.location.href);
+      });
+    }
+  });
+
+  // Janela Flutuante (Picture-in-Picture)
+  on('btnPipMode', 'click', async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        showNotification('Janela flutuante fechada');
+      } else if (remoteVideo && remoteVideo.srcObject) {
+        await remoteVideo.requestPictureInPicture();
+        showNotification('Modo janela flutuante (PiP) ativado!');
+      } else if (localVideo && localVideo.srcObject) {
+        await localVideo.requestPictureInPicture();
+        showNotification('Modo janela flutuante ativado!');
+      } else {
+        showNotification('Abra a câmera ou entre numa ligação para usar janela flutuante');
+      }
+    } catch (err) {
+      showNotification('Modo flutuante não disponível no momento');
+    }
+  });
+
+  // Luz Virtual / Ring Light para o Rosto
+  let isRingLightOn = false;
+  const virtualRingLightOverlay = document.getElementById('virtualRingLightOverlay');
+  const iconRingLight = document.getElementById('iconRingLight');
+  on('btnVirtualRingLight', 'click', () => {
+    isRingLightOn = !isRingLightOn;
+    if (virtualRingLightOverlay) {
+      if (isRingLightOn) {
+        virtualRingLightOverlay.classList.remove('hidden');
+        if (iconRingLight) iconRingLight.classList.add('text-amber-300', 'fill-amber-400');
+        showNotification('Ring Light facial ativada!');
+      } else {
+        virtualRingLightOverlay.classList.add('hidden');
+        if (iconRingLight) iconRingLight.classList.remove('fill-amber-400');
+        showNotification('Ring Light desativada');
+      }
+    }
+  });
+
+  // Atalhos Rápidos de Teclado no PC
+  window.addEventListener('keydown', (e) => {
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    if (e.key === 'Escape') {
+      [aboutCreatorModal, settingsModal, savedCallsModal, viewSpecificCallModal, statsModal, filtersModal].forEach(m => m?.classList.add('hidden'));
+      return;
+    }
+
+    if (callScreen && !callScreen.classList.contains('hidden')) {
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        btnToggleMic?.click();
+      } else if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        btnToggleCamera?.click();
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        document.getElementById('btnPipMode')?.click();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        document.getElementById('btnToggleFullscreen')?.click();
+      }
+    }
+  });
+
+  // Som suave de conexão via Web Audio API
+  function playConnectChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, now);
+      osc1.frequency.exponentialRampToValueAtTime(659.25, now + 0.15);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, now + 0.15);
+      osc2.frequency.exponentialRampToValueAtTime(783.99, now + 0.35);
+
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc1.stop(now + 0.2);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.5);
+    } catch(e) {}
+  }
 
   on(inputUserName, 'change', (e) => {
     state.userName = e.target.value.trim() || 'Você';
@@ -837,9 +1091,9 @@ document.addEventListener('DOMContentLoaded', () => {
     state.roomId = roomId;
     
     state.transcriptHistory = [];
-    if (transcriptList) {
-      transcriptList.innerHTML = '<div class="text-center py-8 text-slate-500"><p>Histórico iniciado para a sala: ' + escapeHtml(roomId) + '</p></div>';
-    }
+    state.savedVocab = [];
+    updateSavedVocabCount();
+    renderTranscriptList();
 
     if (lobbyScreen) lobbyScreen.classList.add('hidden');
     if (callScreen) callScreen.classList.remove('hidden');
@@ -975,6 +1229,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     updateConnectionBadge('Conectado', 'connected');
     if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Conectado';
+    playConnectChime();
   }
 
   function setupDataConnectionListeners(conn) {
@@ -1053,6 +1308,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
       showRemoteCaption(data.sender, data.text, data.translated);
+      playSoftBeep();
     } else if (data.type === 'speech') {
       handleRemoteSpeech(data);
     } else if (data.type === 'chat') {
@@ -1174,7 +1430,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // MOTOR DE TRADUÇÃO EM TEMPO REAL
+  // TRADUÇÃO EM TEMPO REAL
   // ==========================================
 
   async function translateText(text, fromLang, toLang) {
@@ -1229,6 +1485,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const translated = await translateText(data.text, data.lang, state.targetLang);
 
     showRemoteCaption(data.sender || 'Colega', data.text, translated);
+    playSoftBeep();
 
     if (state.ttsEnabled) {
       speakText(translated, state.targetLang);
@@ -1252,35 +1509,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // HISTÓRICO DA CHAMADA ATUAL
+  // ADIÇÃO DE MENSAGENS AO HISTÓRICO
   // ==========================================
 
   function addTranscriptItem(item) {
     state.transcriptHistory.push(item);
-    if (!transcriptList) return;
-
-    if (state.transcriptHistory.length === 1) transcriptList.innerHTML = '';
-
-    const div = document.createElement('div');
-    div.className = `p-2.5 rounded-xl border ${
-      item.isSelf ? 'bg-indigo-950/40 border-indigo-900/60 ml-2' : 'bg-slate-950/70 border-slate-800 mr-2'
-    }`;
-
-    const senderColor = item.isSelf ? 'text-indigo-400' : 'text-emerald-400';
-    const mainText = item.isSelf ? item.original : (item.translated || item.original);
-    const subText = (!item.isSelf && item.translated) ? `Original: ${item.original}` : '';
-
-    div.innerHTML = `
-      <div class="flex items-center justify-between mb-1">
-        <span class="font-bold ${senderColor}">${escapeHtml(item.sender)}</span>
-        <span class="text-[10px] text-slate-500">${item.timestamp}</span>
-      </div>
-      <div class="text-slate-100 font-medium">${escapeHtml(mainText)}</div>
-      ${subText ? `<div class="text-[10px] text-slate-400 italic mt-0.5">${escapeHtml(subText)}</div>` : ''}
-    `;
-
-    transcriptList.appendChild(div);
-    transcriptList.scrollTop = transcriptList.scrollHeight;
+    renderTranscriptList();
 
     if (!state.isChatDrawerOpen && chatNotificationBadge) {
       chatNotificationBadge.classList.remove('hidden');
@@ -1319,6 +1553,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function handleIncomingChat(data) {
     const translated = await translateText(data.text, data.lang, state.targetLang);
     showRemoteCaption(data.sender || 'Colega', data.text, translated);
+    playSoftBeep();
     addTranscriptItem({
       sender: data.sender || 'Colega',
       isSelf: false,

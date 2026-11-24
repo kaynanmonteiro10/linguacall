@@ -49,3 +49,7 @@ O **LinguaCall Pro** agora é um **Progressive Web App (PWA)** completo:
 - **Motor Duplo de Tradução:** Tradução em tempo real gratuita embutida com suporte opcional à Google Gemini AI.
 - **Armazenamento Seguro Local:** Histórico de reuniões gravado isoladamente por sala no navegador do usuário (`localStorage`), sem enviar dados pessoais para bancos de dados de terceiros.
 - **Tailwind CSS & Lucide Icons:** Interface responsiva moderna com suporte mobile-first e desktop.
+- **Janela Flutuante (Picture-in-Picture):** Acompanhe o vídeo em segundo plano enquanto navega em outras tarefas.
+- **Luz Virtual Facial (Ring Light):** Borda suave na tela para iluminar o rosto em chamadas noturnas.
+- **Áudio Sintetizado Nativo:** Notificações de conexão e mensagens via Web Audio API.
+- **Atalhos Rápidos de Teclado:** Teclas M (Microfone), V (Câmera), P (PiP) e F (Tela Cheia).
