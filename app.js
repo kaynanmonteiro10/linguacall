@@ -1,20 +1,30 @@
 /**
- * LinguaCall Pro - Aplicação de Chamada com Tradução ao Vivo
- * Recursos: Câmera Dupla, Espelhamento, Gravação, Emojis, Exportação Avançada (TXT/CSV/Clipboard)
- * 100% Client-Side WebRTC
+ * LinguaCall Pro - Conexão WebRTC com Isolamento de Histórico por Sala
+ * e Arquivamento Permanente de Reuniões Passadas
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  lucide.createIcons();
+  // Inicialização segura dos ícones
+  try {
+    if (window.lucide) lucide.createIcons();
+  } catch(e) {}
 
-  // Protocolo file://
+  // Função auxiliar segura para adicionar event listener sem quebrar se o elemento não existir
+  function on(idOrEl, event, callback) {
+    const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+    if (el) {
+      el.addEventListener(event, callback);
+    }
+  }
+
+  // Aviso de protocolo file://
   const isFileProtocol = window.location.protocol === 'file:';
   const fileProtocolWarning = document.getElementById('fileProtocolWarning');
   if (isFileProtocol && fileProtocolWarning) {
     fileProtocolWarning.classList.remove('hidden');
   }
 
-  // Elementos do Layout
+  // Telas e Header
   const mainHeader = document.getElementById('mainHeader');
   const lobbyScreen = document.getElementById('lobbyScreen');
   const callScreen = document.getElementById('callScreen');
@@ -23,36 +33,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const callTimerDisplay = document.getElementById('callTimerDisplay');
   const reactionOverlay = document.getElementById('reactionOverlay');
   
-  // Lobby Inputs
+  // Inputs do Lobby
   const inputUserName = document.getElementById('inputUserName');
   const selectSpeakLang = document.getElementById('selectSpeakLang');
   const selectTargetLang = document.getElementById('selectTargetLang');
   const checkStartWithVideo = document.getElementById('checkStartWithVideo');
-  const btnCreateRoom = document.getElementById('btnCreateRoom');
   const inputRoomCode = document.getElementById('inputRoomCode');
-  const btnJoinRoom = document.getElementById('btnJoinRoom');
 
-  // Seletores Rápidos In-Call
+  // Seletores Rápidos Dentro da Chamada
   const inCallSpeakLang = document.getElementById('inCallSpeakLang');
   const inCallTargetLang = document.getElementById('inCallTargetLang');
 
-  // Controles da Chamada
-  const btnCopyInvite = document.getElementById('btnCopyInvite');
-  const btnToggleMic = document.getElementById('btnToggleMic');
-  const iconMic = document.getElementById('iconMic');
-  const btnToggleCamera = document.getElementById('btnToggleCamera');
-  const iconCamera = document.getElementById('iconCamera');
-  const btnFlipCamera = document.getElementById('btnFlipCamera');
-  const btnShareScreen = document.getElementById('btnShareScreen');
-  const btnToggleTTS = document.getElementById('btnToggleTTS');
-  const iconTTS = document.getElementById('iconTTS');
-  const btnRecordCall = document.getElementById('btnRecordCall');
-  const iconRecord = document.getElementById('iconRecord');
-  const btnEndCall = document.getElementById('btnEndCall');
-
-  // Controles de Câmera Local (Espelho & Dual Camera)
-  const btnMirrorLocalVideo = document.getElementById('btnMirrorLocalVideo');
-  const btnToggleDualCamera = document.getElementById('btnToggleDualCamera');
+  // Mídia Local
   const localVideo = document.getElementById('localVideo');
   const localSecondVideo = document.getElementById('localSecondVideo');
   const localAvatarBox = document.getElementById('localAvatarBox');
@@ -62,18 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const localAudioWave = document.getElementById('localAudioWave');
   const localLiveCaptionOverlay = document.getElementById('localLiveCaptionOverlay');
   const localLiveCaptionText = document.getElementById('localLiveCaptionText');
-
-  // Gaveta de Chat / Histórico
-  const btnToggleDrawerChat = document.getElementById('btnToggleDrawerChat');
-  const btnCloseChatDrawer = document.getElementById('btnCloseChatDrawer');
-  const chatDrawer = document.getElementById('chatDrawer');
-  const chatNotificationBadge = document.getElementById('chatNotificationBadge');
-  const btnExportTxt = document.getElementById('btnExportTxt');
-  const btnExportCsv = document.getElementById('btnExportCsv');
-  const btnCopyTranscript = document.getElementById('btnCopyTranscript');
-  const transcriptList = document.getElementById('transcriptList');
-  const inputChatFallback = document.getElementById('inputChatFallback');
-  const btnSendChat = document.getElementById('btnSendChat');
+  const btnMirrorLocalVideo = document.getElementById('btnMirrorLocalVideo');
+  const btnToggleDualCamera = document.getElementById('btnToggleDualCamera');
 
   // Mídia Remota
   const remoteVideo = document.getElementById('remoteVideo');
@@ -85,21 +67,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const remoteAudioFallback = document.getElementById('remoteAudioFallback');
   const remoteStatusIndicator = document.getElementById('remoteStatusIndicator');
   
-  // Balões de Legenda na Tela
+  // Legendas Sobrepostas na Tela
   const remoteLiveCaptionOverlay = document.getElementById('remoteLiveCaptionOverlay');
   const remoteLiveCaptionSpeaker = document.getElementById('remoteLiveCaptionSpeaker');
   const remoteLiveCaptionTranslated = document.getElementById('remoteLiveCaptionTranslated');
   const remoteLiveCaptionOriginal = document.getElementById('remoteLiveCaptionOriginal');
 
-  // Modal Configurações
-  const btnSettings = document.getElementById('btnSettings');
+  // Controles
+  const btnToggleMic = document.getElementById('btnToggleMic');
+  const iconMic = document.getElementById('iconMic');
+  const btnToggleCamera = document.getElementById('btnToggleCamera');
+  const iconCamera = document.getElementById('iconCamera');
+  const btnShareScreen = document.getElementById('btnShareScreen');
+  const btnToggleTTS = document.getElementById('btnToggleTTS');
+  const btnRecordCall = document.getElementById('btnRecordCall');
+  const iconRecord = document.getElementById('iconRecord');
+
+  // Gaveta de Chat
+  const chatDrawer = document.getElementById('chatDrawer');
+  const chatNotificationBadge = document.getElementById('chatNotificationBadge');
+  const transcriptList = document.getElementById('transcriptList');
+  const inputChatFallback = document.getElementById('inputChatFallback');
+
+  // Modais
   const settingsModal = document.getElementById('settingsModal');
-  const btnCloseSettings = document.getElementById('btnCloseSettings');
-  const btnSaveSettings = document.getElementById('btnSaveSettings');
-  const selectTranslateEngine = document.getElementById('selectTranslateEngine');
-  const geminiKeyContainer = document.getElementById('geminiKeyContainer');
-  const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
-  const checkContinuousRecognition = document.getElementById('checkContinuousRecognition');
+  const savedCallsModal = document.getElementById('savedCallsModal');
+  const viewSpecificCallModal = document.getElementById('viewSpecificCallModal');
+  const statsModal = document.getElementById('statsModal');
+  const savedCallsList = document.getElementById('savedCallsList');
 
   // Estado da Aplicação
   const state = {
@@ -134,53 +129,257 @@ document.addEventListener('DOMContentLoaded', () => {
     recordedChunks: [],
     isRecording: false,
     
-    // Temporizador
+    // Cronômetro
     callStartTime: null,
     timerInterval: null,
     
+    // HISTÓRICO ISOLADO DA CHAMADA ATUAL
     transcriptHistory: []
   };
 
   // Carregar dados salvos
-  inputUserName.value = state.userName;
-  selectSpeakLang.value = state.speakLang;
-  selectTargetLang.value = state.targetLang;
-  inCallSpeakLang.value = state.speakLang;
-  inCallTargetLang.value = state.targetLang;
-  selectTranslateEngine.value = state.engine;
-  inputGeminiApiKey.value = state.geminiKey;
-  if (state.engine === 'gemini') geminiKeyContainer.classList.remove('hidden');
+  if (inputUserName) inputUserName.value = state.userName;
+  if (selectSpeakLang) selectSpeakLang.value = state.speakLang;
+  if (selectTargetLang) selectTargetLang.value = state.targetLang;
+  if (inCallSpeakLang) inCallSpeakLang.value = state.speakLang;
+  if (inCallTargetLang) inCallTargetLang.value = state.targetLang;
+  
+  const selectTranslateEngine = document.getElementById('selectTranslateEngine');
+  const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
+  const geminiKeyContainer = document.getElementById('geminiKeyContainer');
+  if (selectTranslateEngine) selectTranslateEngine.value = state.engine;
+  if (inputGeminiApiKey) inputGeminiApiKey.value = state.geminiKey;
+  if (geminiKeyContainer && state.engine === 'gemini') geminiKeyContainer.classList.remove('hidden');
 
   applyMirrorSetting();
 
   const urlParams = new URLSearchParams(window.location.search);
   const roomFromUrl = urlParams.get('room');
-  if (roomFromUrl) inputRoomCode.value = roomFromUrl;
+  if (roomFromUrl && inputRoomCode) inputRoomCode.value = roomFromUrl;
 
   // ==========================================
-  // ESPELHAMENTO DE CÂMERA (CORREÇÃO DE ROSTO)
+  // ARQUIVAMENTO DE REUNIÕES PASSADAS (LOCALSTORAGE)
   // ==========================================
-  btnMirrorLocalVideo.addEventListener('click', () => {
-    state.isMirrored = !state.isMirrored;
-    localStorage.setItem('lc_mirror', state.isMirrored);
-    applyMirrorSetting();
-    showNotification(state.isMirrored ? 'Espelhamento ativado' : 'Espelhamento desativado (visão real)');
+  function saveCallToArchive(roomId, durationStr, history) {
+    if (!history || history.length === 0) return;
+    try {
+      const existing = JSON.parse(localStorage.getItem('lc_saved_calls') || '[]');
+      const newRecord = {
+        id: roomId || 'sala-' + Date.now().toString(36),
+        date: new Date().toLocaleString(),
+        duration: durationStr || '00:00',
+        totalSpeeches: history.length,
+        messages: history
+      };
+      existing.unshift(newRecord); // Mais recente primeiro
+      localStorage.setItem('lc_saved_calls', JSON.stringify(existing.slice(0, 30))); // Guarda até 30 reuniões
+    } catch(e) {
+      console.warn('Erro ao salvar no arquivo de reuniões:', e);
+    }
+  }
+
+  function renderSavedCallsList() {
+    if (!savedCallsList) return;
+    savedCallsList.innerHTML = '';
+    const records = JSON.parse(localStorage.getItem('lc_saved_calls') || '[]');
+    
+    if (records.length === 0) {
+      savedCallsList.innerHTML = '<div class="text-center py-8 text-slate-500">Nenhuma reunião finalizada ainda.<br>Quando você fizer uma ligação, ela aparecerá arquivada aqui.</div>';
+      return;
+    }
+
+    records.forEach((rec, idx) => {
+      const item = document.createElement('div');
+      item.className = 'p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition';
+      item.innerHTML = `
+        <div class="flex-1 pr-3">
+          <div class="font-bold text-white flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+            <span>Sala: ${escapeHtml(rec.id)}</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-0.5">
+            ${rec.date} • Duração: ${rec.duration} • ${rec.totalSpeeches} falas
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button class="btnViewCall px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs transition" data-idx="${idx}">
+            Ver Chat
+          </button>
+          <button class="btnDeleteCall p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition" data-idx="${idx}" title="Excluir">
+            ✕
+          </button>
+        </div>
+      `;
+      savedCallsList.appendChild(item);
+    });
+
+    // Ações dos itens
+    document.querySelectorAll('.btnViewCall').forEach(b => {
+      b.addEventListener('click', () => {
+        const idx = parseInt(b.dataset.idx);
+        openSpecificCallView(records[idx]);
+      });
+    });
+
+    document.querySelectorAll('.btnDeleteCall').forEach(b => {
+      b.addEventListener('click', () => {
+        const idx = parseInt(b.dataset.idx);
+        records.splice(idx, 1);
+        localStorage.setItem('lc_saved_calls', JSON.stringify(records));
+        renderSavedCallsList();
+      });
+    });
+  }
+
+  function openSpecificCallView(record) {
+    if (!record || !viewSpecificCallModal) return;
+    const title = document.getElementById('viewSpecificCallTitle');
+    const sub = document.getElementById('viewSpecificCallSubtitle');
+    const body = document.getElementById('viewSpecificCallBody');
+    const btnDownload = document.getElementById('btnDownloadSpecificCallTxt');
+
+    if (title) title.textContent = 'Sala: ' + record.id;
+    if (sub) sub.textContent = `${record.date} • Duração: ${record.duration} • ${record.totalSpeeches} mensagens`;
+
+    if (body) {
+      body.innerHTML = '';
+      record.messages.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'p-2.5 bg-slate-950 border border-slate-800 rounded-xl';
+        const orig = m.original ? `<div class="text-[11px] text-slate-400 italic mt-0.5">Original: ${escapeHtml(m.original)}</div>` : '';
+        const main = m.translated || m.original;
+        div.innerHTML = `
+          <div class="flex justify-between text-[11px] mb-1 font-semibold">
+            <span class="${m.isSelf ? 'text-indigo-400' : 'text-emerald-400'}">${escapeHtml(m.sender)}</span>
+            <span class="text-slate-500">${m.timestamp}</span>
+          </div>
+          <div class="text-white">${escapeHtml(main)}</div>
+          ${orig}
+        `;
+        body.appendChild(div);
+      });
+    }
+
+    if (btnDownload) {
+      btnDownload.onclick = () => {
+        let txt = `RELATORIO DA REUNIAO - LINGUACALL\nData: ${record.date}\nSala: ${record.id}\nDuracao: ${record.duration}\n\n`;
+        record.messages.forEach(m => {
+          txt += `[${m.timestamp}] ${m.sender}:\n  ${m.translated || m.original}\n`;
+          if (m.original && m.translated) txt += `  (Original: ${m.original})\n`;
+          txt += `\n`;
+        });
+        downloadBlob(txt, `reuniao-${record.id}.txt`, 'text/plain;charset=utf-8');
+      };
+    }
+
+    savedCallsModal.classList.add('hidden');
+    viewSpecificCallModal.classList.remove('hidden');
+  }
+
+  on('btnOpenSavedCallsModal', 'click', () => {
+    renderSavedCallsList();
+    if (savedCallsModal) savedCallsModal.classList.remove('hidden');
+  });
+  on('btnCloseSavedCallsModal', 'click', () => savedCallsModal?.classList.add('hidden'));
+  on('btnCloseSavedCallsModalBtn', 'click', () => savedCallsModal?.classList.add('hidden'));
+  on('btnCloseSpecificCallModal', 'click', () => {
+    viewSpecificCallModal?.classList.add('hidden');
+    savedCallsModal?.classList.remove('hidden');
+  });
+  on('btnCloseSpecificCallModalBtn', 'click', () => {
+    viewSpecificCallModal?.classList.add('hidden');
+    savedCallsModal?.classList.remove('hidden');
+  });
+  on('btnClearAllSavedCalls', 'click', () => {
+    if (confirm('Deseja apagar todo o histórico de reuniões passadas?')) {
+      localStorage.removeItem('lc_saved_calls');
+      renderSavedCallsList();
+    }
   });
 
-  function applyMirrorSetting() {
-    if (state.isMirrored) {
-      localVideo.classList.add('-scale-x-100');
-      btnMirrorLocalVideo.classList.add('text-indigo-400');
-    } else {
-      localVideo.classList.remove('-scale-x-100');
-      btnMirrorLocalVideo.classList.remove('text-indigo-400');
+  // ==========================================
+  // TESTE DE MICROFONE NO LOBBY
+  // ==========================================
+  let micTestStream = null;
+  let micTestAudioCtx = null;
+  let micTestInterval = null;
+
+  on('btnTestMicLobby', 'click', async () => {
+    const btn = document.getElementById('btnTestMicLobby');
+    const bar = document.getElementById('micVolumeBar');
+
+    if (micTestStream) {
+      // Parar teste
+      stopMicTest();
+      if (btn) btn.textContent = 'Testar áudio';
+      if (bar) bar.style.width = '0%';
+      return;
+    }
+
+    try {
+      if (btn) btn.textContent = 'Ouvindo...';
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micTestStream = stream;
+
+      micTestAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = micTestAudioCtx.createAnalyser();
+      const source = micTestAudioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      analyser.fftSize = 64;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      micTestInterval = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        const average = sum / dataArray.length;
+        const percent = Math.min(100, Math.round((average / 128) * 100));
+        if (bar) bar.style.width = percent + '%';
+      }, 80);
+
+    } catch (e) {
+      console.warn('Erro ao testar microfone:', e);
+      alert('Não foi possível acessar o microfone para teste. Verifique as permissões.');
+      stopMicTest();
+      if (btn) btn.textContent = 'Testar áudio';
+    }
+  });
+
+  function stopMicTest() {
+    if (micTestInterval) clearInterval(micTestInterval);
+    if (micTestStream) {
+      micTestStream.getTracks().forEach(t => t.stop());
+      micTestStream = null;
+    }
+    if (micTestAudioCtx) {
+      micTestAudioCtx.close().catch(() => {});
+      micTestAudioCtx = null;
     }
   }
 
   // ==========================================
-  // CÂMERA DUPLA SIMULTÂNEA (DUAL CAMERA)
+  // ESPELHO & CÂMERA DUPLA
   // ==========================================
-  btnToggleDualCamera.addEventListener('click', async () => {
+  on(btnMirrorLocalVideo, 'click', () => {
+    state.isMirrored = !state.isMirrored;
+    localStorage.setItem('lc_mirror', state.isMirrored);
+    applyMirrorSetting();
+    showNotification(state.isMirrored ? 'Espelhamento ativado' : 'Espelhamento desativado');
+  });
+
+  function applyMirrorSetting() {
+    if (!localVideo) return;
+    if (state.isMirrored) {
+      localVideo.classList.add('-scale-x-100');
+      btnMirrorLocalVideo?.classList.add('text-indigo-400');
+    } else {
+      localVideo.classList.remove('-scale-x-100');
+      btnMirrorLocalVideo?.classList.remove('text-indigo-400');
+    }
+  }
+
+  on(btnToggleDualCamera, 'click', async () => {
     if (!state.isVideoEnabled) {
       showNotification('Ligue a câmera principal primeiro.');
       return;
@@ -188,7 +387,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!state.isDualCameraActive) {
       try {
-        showNotification('Iniciando segunda câmera...');
         const secondFacing = state.currentFacingMode === 'user' ? 'environment' : 'user';
         const secondStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: secondFacing, width: { ideal: 640 }, height: { ideal: 480 } }
@@ -196,16 +394,19 @@ document.addEventListener('DOMContentLoaded', () => {
         state.localSecondStream = secondStream;
         state.isDualCameraActive = true;
 
-        localSecondVideo.srcObject = secondStream;
-        localSecondVideo.classList.remove('hidden');
-        localVideo.classList.remove('h-full');
-        localVideo.classList.add('h-1/2');
+        if (localSecondVideo) {
+          localSecondVideo.srcObject = secondStream;
+          localSecondVideo.classList.remove('hidden');
+        }
+        if (localVideo) {
+          localVideo.classList.remove('h-full');
+          localVideo.classList.add('h-1/2');
+        }
 
-        btnToggleDualCamera.classList.add('text-emerald-400', 'bg-emerald-950/60');
-        showNotification('Câmera dupla ativada com sucesso!');
+        btnToggleDualCamera?.classList.add('text-emerald-400');
+        showNotification('Câmera dupla ativada!');
       } catch (err) {
-        console.warn('Erro ao ativar câmera dupla:', err);
-        alert('Seu dispositivo ou navegador não permite manter as duas câmeras (frontal e traseira) ligadas ao mesmo tempo no hardware.\n\nVocê pode usar o botão "Virar Câmera" na barra inferior para alternar facilmente!');
+        alert('Seu dispositivo não suporta abrir duas câmeras simultâneas no navegador.\nVocê pode usar o botão "Virar Câmera" na barra inferior para alternar!');
       }
     } else {
       stopSecondCamera();
@@ -219,14 +420,16 @@ document.addEventListener('DOMContentLoaded', () => {
       state.localSecondStream = null;
     }
     state.isDualCameraActive = false;
-    localSecondVideo.classList.add('hidden');
-    localVideo.classList.remove('h-1/2');
-    localVideo.classList.add('h-full');
-    btnToggleDualCamera.classList.remove('text-emerald-400', 'bg-emerald-950/60');
+    if (localSecondVideo) localSecondVideo.classList.add('hidden');
+    if (localVideo) {
+      localVideo.classList.remove('h-1/2');
+      localVideo.classList.add('h-full');
+    }
+    btnToggleDualCamera?.classList.remove('text-emerald-400');
   }
 
   // ==========================================
-  // REAÇÕES RÁPIDAS (EMOJIS FLUTUANTES)
+  // EMOJIS FLUTUANTES
   // ==========================================
   document.querySelectorAll('.btnReaction').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -237,32 +440,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function triggerFloatingEmoji(emoji, isSelf = false) {
+    if (!reactionOverlay) return;
     const el = document.createElement('div');
     el.className = 'absolute text-3xl select-none animate-float-up pointer-events-none z-50';
-    el.style.left = isSelf ? `${Math.random() * 30 + 15}%` : `${Math.random() * 40 + 40}%`;
-    el.style.bottom = '80px';
+    el.style.left = isSelf ? `${Math.random() * 25 + 15}%` : `${Math.random() * 35 + 45}%`;
+    el.style.bottom = '90px';
     el.textContent = emoji;
     reactionOverlay.appendChild(el);
-    setTimeout(() => el.remove(), 2600);
+    setTimeout(() => el.remove(), 2500);
   }
 
   // ==========================================
-  // GRAVAÇÃO DA CHAMADA (MEDIARECORDER LOCAL)
+  // GRAVAÇÃO DA CHAMADA
   // ==========================================
-  btnRecordCall.addEventListener('click', () => {
-    if (!state.isRecording) {
-      startRecording();
-    } else {
-      stopRecording();
-    }
+  on(btnRecordCall, 'click', () => {
+    if (!state.isRecording) startRecording();
+    else stopRecording();
   });
 
   function startRecording() {
     try {
-      const audioTracks = [];
-      if (state.localStream) audioTracks.push(...state.localStream.getAudioTracks());
-      if (state.remoteStream) audioTracks.push(...state.remoteStream.getAudioTracks());
-
       const streamToRecord = state.remoteStream || state.localStream;
       if (!streamToRecord) {
         showNotification('Nenhum vídeo ativo para gravar.');
@@ -270,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       state.recordedChunks = [];
-      state.mediaRecorder = new MediaRecorder(streamToRecord, { mimeType: 'video/webm;codecs=vp8,opus' });
+      state.mediaRecorder = new MediaRecorder(streamToRecord, { mimeType: 'video/webm' });
 
       state.mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) state.recordedChunks.push(e.data);
@@ -278,23 +475,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       state.mediaRecorder.onstop = () => {
         const blob = new Blob(state.recordedChunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `reuniao-${state.roomId || 'linguacall'}.webm`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showNotification('Gravação concluída e salva no seu aparelho!');
+        downloadBlob(blob, `gravacao-${state.roomId || 'reuniao'}.webm`, 'video/webm');
+        showNotification('Gravação salva no seu dispositivo!');
       };
 
       state.mediaRecorder.start(1000);
       state.isRecording = true;
-      btnRecordCall.classList.add('bg-rose-600/30', 'text-rose-400', 'border-rose-500/50');
-      iconRecord.setAttribute('data-lucide', 'square');
-      lucide.createIcons();
-      showNotification('Gravação da reunião iniciada!');
+      btnRecordCall?.classList.add('bg-rose-600/30', 'text-rose-400');
+      iconRecord?.setAttribute('data-lucide', 'square');
+      try { lucide.createIcons(); } catch(e) {}
+      showNotification('Gravação iniciada!');
     } catch (e) {
-      console.warn('Erro ao gravar chamada:', e);
       showNotification('Gravação não suportada neste navegador.');
     }
   }
@@ -303,68 +494,60 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.mediaRecorder && state.isRecording) {
       state.mediaRecorder.stop();
       state.isRecording = false;
-      btnRecordCall.classList.remove('bg-rose-600/30', 'text-rose-400', 'border-rose-500/50');
-      iconRecord.setAttribute('data-lucide', 'disc');
-      lucide.createIcons();
+      btnRecordCall?.classList.remove('bg-rose-600/30', 'text-rose-400');
+      iconRecord?.setAttribute('data-lucide', 'disc');
+      try { lucide.createIcons(); } catch(e) {}
     }
   }
 
   // ==========================================
-  // EXPORTAÇÃO AVANÇADA DO HISTÓRICO
+  // EXPORTAÇÃO DO HISTÓRICO DA CHAMADA ATUAL
   // ==========================================
-
-  // 1. Exportar TXT
-  btnExportTxt.addEventListener('click', () => {
+  on('btnExportTxt', 'click', () => {
     if (state.transcriptHistory.length === 0) {
-      alert('Nenhuma conversa no histórico ainda para exportar.');
+      alert('Nenhuma conversa nesta chamada ainda para exportar.');
       return;
     }
-    let fileContent = `RELATORIO DE REUNIAO - LINGUACALL\nData: ${new Date().toLocaleString()}\nSala: ${state.roomId}\nTotal de Falas: ${state.transcriptHistory.length}\n\n`;
-    state.transcriptHistory.forEach(item => {
-      fileContent += `[${item.timestamp}] ${item.sender}:\n`;
-      if (item.isSelf) {
-        fileContent += `  ${item.original}\n\n`;
-      } else {
-        fileContent += `  Traducao: ${item.translated || item.original}\n`;
-        fileContent += `  Original: ${item.original}\n\n`;
-      }
+    let txt = `RELATORIO DE REUNIAO - LINGUACALL\nData: ${new Date().toLocaleString()}\nSala: ${state.roomId}\n\n`;
+    state.transcriptHistory.forEach(m => {
+      txt += `[${m.timestamp}] ${m.sender}:\n  ${m.translated || m.original}\n`;
+      if (m.original && m.translated) txt += `  (Original: ${m.original})\n`;
+      txt += `\n`;
     });
-    downloadBlob(fileContent, `transcricao-${state.roomId || 'reuniao'}.txt`, 'text/plain;charset=utf-8');
+    downloadBlob(txt, `reuniao-${state.roomId}.txt`, 'text/plain;charset=utf-8');
   });
 
-  // 2. Exportar CSV (Excel / Planilhas)
-  btnExportCsv.addEventListener('click', () => {
+  on('btnExportCsv', 'click', () => {
     if (state.transcriptHistory.length === 0) {
-      alert('Nenhuma conversa gravada para exportar em CSV.');
+      alert('Nenhuma conversa nesta chamada para exportar em CSV.');
       return;
     }
     let csv = `Horario,Participante,Texto Original,Texto Traduzido\n`;
-    state.transcriptHistory.forEach(item => {
-      const orig = `"${(item.original || '').replace(/"/g, '""')}"`;
-      const trans = `"${(item.translated || item.original || '').replace(/"/g, '""')}"`;
-      csv += `${item.timestamp},"${item.sender}",${orig},${trans}\n`;
+    state.transcriptHistory.forEach(m => {
+      const orig = `"${(m.original || '').replace(/"/g, '""')}"`;
+      const trans = `"${(m.translated || m.original || '').replace(/"/g, '""')}"`;
+      csv += `${m.timestamp},"${m.sender}",${orig},${trans}\n`;
     });
-    downloadBlob(csv, `transcricao-${state.roomId || 'reuniao'}.csv`, 'text/csv;charset=utf-8');
+    downloadBlob(csv, `reuniao-${state.roomId}.csv`, 'text/csv;charset=utf-8');
   });
 
-  // 3. Copiar Transcrição com 1 Clique
-  btnCopyTranscript.addEventListener('click', () => {
+  on('btnCopyTranscript', 'click', () => {
     if (state.transcriptHistory.length === 0) {
       alert('Nada para copiar ainda.');
       return;
     }
     let text = `Transcrição LinguaCall (${state.roomId}):\n\n`;
-    state.transcriptHistory.forEach(item => {
-      const content = item.isSelf ? item.original : `${item.translated} (Original: ${item.original})`;
-      text += `[${item.timestamp}] ${item.sender}: ${content}\n`;
+    state.transcriptHistory.forEach(m => {
+      const c = m.isSelf ? m.original : `${m.translated} (Original: ${m.original})`;
+      text += `[${m.timestamp}] ${m.sender}: ${c}\n`;
     });
     navigator.clipboard.writeText(text).then(() => {
-      showNotification('Histórico copiado para a área de transferência!');
+      showNotification('Histórico copiado!');
     });
   });
 
   function downloadBlob(content, filename, type) {
-    const blob = new Blob([content], { type: type });
+    const blob = content instanceof Blob ? content : new Blob([content], { type: type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -374,13 +557,42 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // TROCA DE IDIOMAS DURANTE A CHAMADA
+  // ESTATÍSTICAS DA CONVERSA
   // ==========================================
-  inCallSpeakLang.addEventListener('change', (e) => {
+  on('btnOpenStatsModal', 'click', () => {
+    if (!statsModal) return;
+    const dur = callTimerDisplay ? callTimerDisplay.textContent : '00:00';
+    document.getElementById('statsCallDuration').textContent = dur;
+    document.getElementById('statsTotalSpeeches').textContent = state.transcriptHistory.length;
+
+    let localCount = 0;
+    let remoteCount = 0;
+    state.transcriptHistory.forEach(m => {
+      if (m.isSelf) localCount++; else remoteCount++;
+    });
+
+    const total = localCount + remoteCount || 1;
+    const localPct = Math.round((localCount / total) * 100);
+    const remotePct = 100 - localPct;
+
+    document.getElementById('statsLocalBar').style.width = localPct + '%';
+    document.getElementById('statsRemoteBar').style.width = remotePct + '%';
+    document.getElementById('statsLocalPercent').textContent = `Você: ${localPct}% (${localCount})`;
+    document.getElementById('statsRemotePercent').textContent = `Colega: ${remotePct}% (${remoteCount})`;
+
+    statsModal.classList.remove('hidden');
+  });
+  on('btnCloseStatsModal', 'click', () => statsModal?.classList.add('hidden'));
+  on('btnCloseStatsModalBtn', 'click', () => statsModal?.classList.add('hidden'));
+
+  // ==========================================
+  // TROCA DE IDIOMAS IN-CALL
+  // ==========================================
+  on(inCallSpeakLang, 'change', (e) => {
     state.speakLang = e.target.value;
     localStorage.setItem('lc_speak_lang', state.speakLang);
-    selectSpeakLang.value = state.speakLang;
-    localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
+    if (selectSpeakLang) selectSpeakLang.value = state.speakLang;
+    if (localLangBadge) localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
 
     if (speechRecognizer) {
       speechRecognizer.lang = state.speakLang;
@@ -389,71 +601,67 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    sendData({
-      type: 'lang_change',
-      speakLang: state.speakLang
-    });
-
+    sendData({ type: 'lang_change', speakLang: state.speakLang });
     showNotification('Você agora fala em: ' + state.speakLang);
   });
 
-  inCallTargetLang.addEventListener('change', (e) => {
+  on(inCallTargetLang, 'change', (e) => {
     state.targetLang = e.target.value;
     localStorage.setItem('lc_target_lang', state.targetLang);
-    selectTargetLang.value = state.targetLang;
+    if (selectTargetLang) selectTargetLang.value = state.targetLang;
     showNotification('Você agora lê em: ' + state.targetLang.toUpperCase());
   });
 
   // Gaveta Mobile
-  btnToggleDrawerChat.addEventListener('click', () => {
+  on('btnToggleDrawerChat', 'click', () => {
     state.isChatDrawerOpen = !state.isChatDrawerOpen;
     updateChatDrawerUI();
   });
-  btnCloseChatDrawer.addEventListener('click', () => {
+  on('btnCloseChatDrawer', 'click', () => {
     state.isChatDrawerOpen = false;
     updateChatDrawerUI();
   });
 
   function updateChatDrawerUI() {
+    if (!chatDrawer) return;
     if (state.isChatDrawerOpen) {
       chatDrawer.classList.remove('translate-x-full');
-      chatNotificationBadge.classList.add('hidden');
+      chatNotificationBadge?.classList.add('hidden');
     } else {
       chatDrawer.classList.add('translate-x-full');
     }
   }
 
-  // Modal Configurações
-  btnSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
-  btnCloseSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
-  selectTranslateEngine.addEventListener('change', (e) => {
-    if (e.target.value === 'gemini') geminiKeyContainer.classList.remove('hidden');
-    else geminiKeyContainer.classList.add('hidden');
+  // Configurações
+  on('btnSettings', 'click', () => settingsModal?.classList.remove('hidden'));
+  on('btnCloseSettings', 'click', () => settingsModal?.classList.add('hidden'));
+  on(selectTranslateEngine, 'change', (e) => {
+    if (e.target.value === 'gemini') geminiKeyContainer?.classList.remove('hidden');
+    else geminiKeyContainer?.classList.add('hidden');
   });
 
-  btnSaveSettings.addEventListener('click', () => {
-    state.engine = selectTranslateEngine.value;
-    state.geminiKey = inputGeminiApiKey.value.trim();
-    state.autoRestartSpeech = checkContinuousRecognition.checked;
+  on('btnSaveSettings', 'click', () => {
+    state.engine = selectTranslateEngine ? selectTranslateEngine.value : 'mymemory';
+    state.geminiKey = inputGeminiApiKey ? inputGeminiApiKey.value.trim() : '';
     localStorage.setItem('lc_engine', state.engine);
     localStorage.setItem('lc_gemini_key', state.geminiKey);
-    settingsModal.classList.add('hidden');
+    settingsModal?.classList.add('hidden');
     showNotification('Configurações salvas!');
   });
 
-  inputUserName.addEventListener('change', (e) => {
+  on(inputUserName, 'change', (e) => {
     state.userName = e.target.value.trim() || 'Você';
     localStorage.setItem('lc_user_name', state.userName);
   });
-  selectSpeakLang.addEventListener('change', (e) => {
+  on(selectSpeakLang, 'change', (e) => {
     state.speakLang = e.target.value;
-    inCallSpeakLang.value = state.speakLang;
+    if (inCallSpeakLang) inCallSpeakLang.value = state.speakLang;
     localStorage.setItem('lc_speak_lang', state.speakLang);
     if (speechRecognizer) speechRecognizer.lang = state.speakLang;
   });
-  selectTargetLang.addEventListener('change', (e) => {
+  on(selectTargetLang, 'change', (e) => {
     state.targetLang = e.target.value;
-    inCallTargetLang.value = state.targetLang;
+    if (inCallTargetLang) inCallTargetLang.value = state.targetLang;
     localStorage.setItem('lc_target_lang', state.targetLang);
   });
 
@@ -462,6 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateConnectionBadge(text, type = 'ready') {
+    if (!connectionStatusBadge || !connectionStatusText) return;
     connectionStatusBadge.classList.remove('hidden');
     connectionStatusText.textContent = text;
     connectionStatusBadge.className = 'px-2 py-0.5 rounded-full text-[11px] border flex items-center gap-1 ';
@@ -479,15 +688,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
 
   async function requestUserMedia(wantVideo = true, facingMode = 'user') {
+    stopMicTest(); // Para o teste do lobby se estiver rodando
+
     if (wantVideo) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
-          video: {
-            facingMode: facingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
+          video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
         });
         state.localStream = stream;
         state.isVideoEnabled = true;
@@ -503,39 +710,46 @@ document.addEventListener('DOMContentLoaded', () => {
       const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       state.localStream = audioStream;
       state.isVideoEnabled = false;
-      localVideo.classList.add('hidden');
-      localAvatarBox.classList.remove('hidden');
+      if (localVideo) localVideo.classList.add('hidden');
+      if (localAvatarBox) localAvatarBox.classList.remove('hidden');
       return audioStream;
     } catch (err) {
       console.error('Falha de microfone:', err);
-      let msg = 'O navegador não autorizou o microfone.';
-      if (window.location.protocol === 'file:') {
-        msg += '\n\nAbra pelo link do GitHub Pages (com HTTPS) para liberar automaticamente.';
-      }
-      alert(msg);
+      alert('O navegador não autorizou o microfone. No computador ou celular, abra pelo link com HTTPS (GitHub Pages) para permitir.');
       throw err;
     }
   }
 
   function setupLocalVideoStream(stream) {
-    localVideo.srcObject = stream;
-    localVideo.classList.remove('hidden');
-    localAvatarBox.classList.add('hidden');
-    btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
-    iconCamera.setAttribute('data-lucide', 'video');
+    if (localVideo) {
+      localVideo.srcObject = stream;
+      localVideo.classList.remove('hidden');
+    }
+    if (localAvatarBox) localAvatarBox.classList.add('hidden');
+    if (btnToggleCamera) {
+      btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
+    }
+    if (iconCamera) iconCamera.setAttribute('data-lucide', 'video');
     applyMirrorSetting();
-    lucide.createIcons();
+    try { lucide.createIcons(); } catch(e) {}
   }
 
   function setupCallUI(roomId) {
     state.roomId = roomId;
-    lobbyScreen.classList.add('hidden');
-    callScreen.classList.remove('hidden');
-    mainHeader.classList.add('hidden');
+    
+    // ZERA O HISTÓRICO PARA ESTA NOVA CHAMADA (NÃO MISTURA COM OUTRAS!)
+    state.transcriptHistory = [];
+    if (transcriptList) {
+      transcriptList.innerHTML = '<div class="text-center py-8 text-slate-500"><p>Histórico iniciado para a sala: ' + escapeHtml(roomId) + '</p></div>';
+    }
 
-    localUserNameDisplay.textContent = state.userName;
-    localUserAvatar.textContent = (state.userName[0] || 'V').toUpperCase();
-    localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
+    if (lobbyScreen) lobbyScreen.classList.add('hidden');
+    if (callScreen) callScreen.classList.remove('hidden');
+    if (mainHeader) mainHeader.classList.add('hidden');
+
+    if (localUserNameDisplay) localUserNameDisplay.textContent = state.userName;
+    if (localUserAvatar) localUserAvatar.textContent = (state.userName[0] || 'V').toUpperCase();
+    if (localLangBadge) localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
 
     // Iniciar Temporizador da Chamada
     state.callStartTime = Date.now();
@@ -544,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const elapsed = Math.floor((Date.now() - state.callStartTime) / 1000);
       const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
       const secs = String(elapsed % 60).padStart(2, '0');
-      callTimerDisplay.textContent = `${mins}:${secs}`;
+      if (callTimerDisplay) callTimerDisplay.textContent = `${mins}:${secs}`;
     }, 1000);
 
     const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
@@ -564,14 +778,14 @@ document.addEventListener('DOMContentLoaded', () => {
     ]
   };
 
-  btnCreateRoom.addEventListener('click', async () => {
+  on('btnCreateRoom', 'click', async () => {
     state.isInitiator = true;
     const roomId = generateRoomId();
     await startCallFlow(roomId);
   });
 
-  btnJoinRoom.addEventListener('click', async () => {
-    let code = inputRoomCode.value.trim();
+  on('btnJoinRoom', 'click', async () => {
+    let code = inputRoomCode ? inputRoomCode.value.trim() : '';
     if (!code) {
       alert('Informe o código da sala.');
       return;
@@ -586,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function startCallFlow(roomId) {
     try {
       updateConnectionBadge('Pedindo microfone...', 'connecting');
-      const wantVideo = checkStartWithVideo.checked;
+      const wantVideo = checkStartWithVideo ? checkStartWithVideo.checked : true;
       await requestUserMedia(wantVideo, 'user');
 
       setupCallUI(roomId);
@@ -601,8 +815,8 @@ document.addEventListener('DOMContentLoaded', () => {
       state.peer.on('open', (id) => {
         if (state.isInitiator) {
           updateConnectionBadge('Aguardando colega...', 'connecting');
-          remoteUserNameDisplay.textContent = 'Aguardando colega...';
-          remoteStatusIndicator.textContent = 'Envie o convite para o colega';
+          if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Aguardando colega...';
+          if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Envie o link para o colega';
         } else {
           updateConnectionBadge('Conectando...', 'connecting');
           connectToPeer(roomId);
@@ -647,23 +861,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function attachRemoteStream(remoteStream) {
     state.remoteStream = remoteStream;
-    remoteVideo.srcObject = remoteStream;
-    remoteAudioFallback.srcObject = remoteStream;
+    if (remoteVideo) remoteVideo.srcObject = remoteStream;
+    if (remoteAudioFallback) remoteAudioFallback.srcObject = remoteStream;
 
     const videoTracks = remoteStream.getVideoTracks();
     if (videoTracks.length > 0 && videoTracks[0].enabled) {
-      remoteVideo.classList.remove('hidden');
-      remoteAvatarBox.classList.add('hidden');
+      if (remoteVideo) remoteVideo.classList.remove('hidden');
+      if (remoteAvatarBox) remoteAvatarBox.classList.add('hidden');
     } else {
-      remoteVideo.classList.add('hidden');
-      remoteAvatarBox.classList.remove('hidden');
+      if (remoteVideo) remoteVideo.classList.add('hidden');
+      if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
     }
 
-    remoteVideo.play().catch(() => {});
-    remoteAudioFallback.play().catch(() => {});
+    if (remoteVideo) remoteVideo.play().catch(() => {});
+    if (remoteAudioFallback) remoteAudioFallback.play().catch(() => {});
     
     updateConnectionBadge('Conectado', 'connected');
-    remoteStatusIndicator.textContent = 'Conectado';
+    if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Conectado';
   }
 
   function setupDataConnectionListeners(conn) {
@@ -683,11 +897,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     conn.on('close', () => {
       updateConnectionBadge('Colega desconectou', 'connecting');
-      remoteUserNameDisplay.textContent = 'Colega saiu';
-      remoteLangBadge.textContent = '--';
-      remoteStatusIndicator.textContent = 'Desconectado';
-      remoteVideo.classList.add('hidden');
-      remoteAvatarBox.classList.remove('hidden');
+      if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Colega saiu';
+      if (remoteLangBadge) remoteLangBadge.textContent = '--';
+      if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Desconectado';
+      if (remoteVideo) remoteVideo.classList.add('hidden');
+      if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
       hideRemoteCaption();
     });
   }
@@ -700,10 +914,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function handleIncomingData(data) {
     if (data.type === 'handshake') {
-      remoteUserNameDisplay.textContent = data.userName || 'Colega';
-      remoteUserAvatar.textContent = (data.userName ? data.userName[0] : 'C').toUpperCase();
-      remoteLangBadge.textContent = (data.speakLang || 'outro').split('-')[0].toUpperCase();
-      remoteStatusIndicator.textContent = 'Online';
+      if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = data.userName || 'Colega';
+      if (remoteUserAvatar) remoteUserAvatar.textContent = (data.userName ? data.userName[0] : 'C').toUpperCase();
+      if (remoteLangBadge) remoteLangBadge.textContent = (data.speakLang || 'outro').split('-')[0].toUpperCase();
+      if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Online';
       
       if (state.isInitiator) {
         sendData({
@@ -715,20 +929,20 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       showNotification(`${data.userName || 'Colega'} entrou na chamada!`);
     } else if (data.type === 'handshake_ack') {
-      remoteUserNameDisplay.textContent = data.userName || 'Colega';
-      remoteUserAvatar.textContent = (data.userName ? data.userName[0] : 'C').toUpperCase();
-      remoteLangBadge.textContent = (data.speakLang || 'outro').split('-')[0].toUpperCase();
-      remoteStatusIndicator.textContent = 'Online';
+      if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = data.userName || 'Colega';
+      if (remoteUserAvatar) remoteUserAvatar.textContent = (data.userName ? data.userName[0] : 'C').toUpperCase();
+      if (remoteLangBadge) remoteLangBadge.textContent = (data.speakLang || 'outro').split('-')[0].toUpperCase();
+      if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Online';
     } else if (data.type === 'lang_change') {
-      remoteLangBadge.textContent = (data.speakLang || '').split('-')[0].toUpperCase();
-      showNotification(`${remoteUserNameDisplay.textContent} agora fala em ${data.speakLang}`);
+      if (remoteLangBadge) remoteLangBadge.textContent = (data.speakLang || '').split('-')[0].toUpperCase();
+      showNotification(`${remoteUserNameDisplay?.textContent || 'Colega'} agora fala em ${data.speakLang}`);
     } else if (data.type === 'video_toggle') {
       if (data.enabled) {
-        remoteVideo.classList.remove('hidden');
-        remoteAvatarBox.classList.add('hidden');
+        if (remoteVideo) remoteVideo.classList.remove('hidden');
+        if (remoteAvatarBox) remoteAvatarBox.classList.add('hidden');
       } else {
-        remoteVideo.classList.add('hidden');
-        remoteAvatarBox.classList.remove('hidden');
+        if (remoteVideo) remoteVideo.classList.add('hidden');
+        if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
       }
     } else if (data.type === 'reaction') {
       triggerFloatingEmoji(data.emoji, false);
@@ -815,6 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showLocalCaption(text) {
+    if (!localLiveCaptionText || !localLiveCaptionOverlay) return;
     localLiveCaptionText.textContent = text;
     localLiveCaptionOverlay.classList.remove('hidden');
     clearTimeout(localCaptionTimeout);
@@ -824,9 +1039,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showRemoteCaption(speaker, original, translated) {
-    remoteLiveCaptionSpeaker.textContent = speaker + ' falando:';
-    remoteLiveCaptionTranslated.textContent = translated;
-    remoteLiveCaptionOriginal.textContent = 'Original: ' + original;
+    if (!remoteLiveCaptionOverlay) return;
+    if (remoteLiveCaptionSpeaker) remoteLiveCaptionSpeaker.textContent = speaker + ' falando:';
+    if (remoteLiveCaptionTranslated) remoteLiveCaptionTranslated.textContent = translated;
+    if (remoteLiveCaptionOriginal) remoteLiveCaptionOriginal.textContent = 'Original: ' + original;
     remoteLiveCaptionOverlay.classList.remove('hidden');
 
     clearTimeout(remoteCaptionTimeout);
@@ -836,11 +1052,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function hideRemoteCaption() {
-    remoteLiveCaptionOverlay.classList.add('hidden');
+    if (remoteLiveCaptionOverlay) remoteLiveCaptionOverlay.classList.add('hidden');
   }
 
   function triggerSpeakingWave(isLocal) {
     const wave = isLocal ? localAudioWave : remoteAudioWave;
+    if (!wave) return;
     wave.classList.remove('hidden');
     clearTimeout(isLocal ? window.localWaveTimer : window.remoteWaveTimer);
     const timer = setTimeout(() => {
@@ -859,7 +1076,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (src === tgt && src !== 'auto') return text;
 
-    // Gemini
+    // Gemini API
     if (state.engine === 'gemini' && state.geminiKey) {
       try {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.geminiKey}`;
@@ -931,11 +1148,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // HISTÓRICO DE CONVERSA
+  // HISTÓRICO DA CHAMADA ATUAL
   // ==========================================
 
   function addTranscriptItem(item) {
     state.transcriptHistory.push(item);
+    if (!transcriptList) return;
+
     if (state.transcriptHistory.length === 1) transcriptList.innerHTML = '';
 
     const div = document.createElement('div');
@@ -959,17 +1178,20 @@ document.addEventListener('DOMContentLoaded', () => {
     transcriptList.appendChild(div);
     transcriptList.scrollTop = transcriptList.scrollHeight;
 
-    if (!state.isChatDrawerOpen) {
+    if (!state.isChatDrawerOpen && chatNotificationBadge) {
       chatNotificationBadge.classList.remove('hidden');
     }
   }
 
-  btnSendChat.addEventListener('click', sendManualChatMessage);
-  inputChatFallback.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendManualChatMessage();
-  });
+  on('btnSendChat', 'click', sendManualChatMessage);
+  if (inputChatFallback) {
+    inputChatFallback.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendManualChatMessage();
+    });
+  }
 
   async function sendManualChatMessage() {
+    if (!inputChatFallback) return;
     const text = inputChatFallback.value.trim();
     if (!text) return;
     inputChatFallback.value = '';
@@ -1003,10 +1225,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // CONTROLES DE MÍDIA (FLIP CAMERA, MIC, ETC)
+  // CONTROLES DE MÍDIA
   // ==========================================
 
-  btnFlipCamera.addEventListener('click', async () => {
+  on('btnFlipCamera', 'click', async () => {
     if (!state.localStream || !state.isVideoEnabled) {
       showNotification('Ligue a câmera primeiro para alternar.');
       return;
@@ -1027,7 +1249,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.localStream.addTrack(newVideoTrack);
       state.currentFacingMode = newFacingMode;
 
-      localVideo.srcObject = state.localStream;
+      if (localVideo) localVideo.srcObject = state.localStream;
       applyMirrorSetting();
 
       if (state.call?.peerConnection) {
@@ -1037,12 +1259,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       showNotification(newFacingMode === 'environment' ? 'Câmera traseira ativada' : 'Câmera frontal ativada');
     } catch (e) {
-      console.warn('Erro ao alternar câmera:', e);
       showNotification('Não foi possível alternar de câmera.');
     }
   });
 
-  btnToggleMic.addEventListener('click', () => {
+  on(btnToggleMic, 'click', () => {
     state.isMuted = !state.isMuted;
     if (state.localStream) {
       state.localStream.getAudioTracks().forEach(track => {
@@ -1051,22 +1272,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (state.isMuted) {
-      btnToggleMic.className = 'w-11 h-11 rounded-full bg-rose-600/30 text-rose-400 border border-rose-500/50 flex items-center justify-center transition active:scale-95';
-      iconMic.setAttribute('data-lucide', 'mic-off');
+      if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-rose-600/30 text-rose-400 border border-rose-500/50 flex items-center justify-center transition active:scale-95';
+      if (iconMic) iconMic.setAttribute('data-lucide', 'mic-off');
       if (speechRecognizer && isRecognitionRunning) {
         try { speechRecognizer.stop(); } catch(e) {}
       }
     } else {
-      btnToggleMic.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
-      iconMic.setAttribute('data-lucide', 'mic');
+      if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
+      if (iconMic) iconMic.setAttribute('data-lucide', 'mic');
       if (speechRecognizer && !isRecognitionRunning) {
         try { speechRecognizer.start(); } catch(e) {}
       }
     }
-    lucide.createIcons();
+    try { lucide.createIcons(); } catch(e) {}
   });
 
-  btnToggleCamera.addEventListener('click', async () => {
+  on(btnToggleCamera, 'click', async () => {
     state.isVideoEnabled = !state.isVideoEnabled;
 
     if (state.localStream) {
@@ -1091,19 +1312,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (state.isVideoEnabled) {
-      localVideo.classList.remove('hidden');
-      localAvatarBox.classList.add('hidden');
-      btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
-      iconCamera.setAttribute('data-lucide', 'video');
+      if (localVideo) localVideo.classList.remove('hidden');
+      if (localAvatarBox) localAvatarBox.classList.add('hidden');
+      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
+      if (iconCamera) iconCamera.setAttribute('data-lucide', 'video');
     } else {
-      localVideo.classList.add('hidden');
-      localAvatarBox.classList.remove('hidden');
-      btnToggleCamera.className = 'w-11 h-11 rounded-full bg-rose-600/30 text-rose-400 border border-rose-500/50 flex items-center justify-center transition active:scale-95';
-      iconCamera.setAttribute('data-lucide', 'video-off');
+      if (localVideo) localVideo.classList.add('hidden');
+      if (localAvatarBox) localAvatarBox.classList.remove('hidden');
+      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-rose-600/30 text-rose-400 border border-rose-500/50 flex items-center justify-center transition active:scale-95';
+      if (iconCamera) iconCamera.setAttribute('data-lucide', 'video-off');
     }
 
     sendData({ type: 'video_toggle', enabled: state.isVideoEnabled });
-    lucide.createIcons();
+    try { lucide.createIcons(); } catch(e) {}
   });
 
   if (btnShareScreen) {
@@ -1114,9 +1335,11 @@ document.addEventListener('DOMContentLoaded', () => {
           state.screenStream = screenStream;
           state.isSharingScreen = true;
           const screenTrack = screenStream.getVideoTracks()[0];
-          localVideo.srcObject = screenStream;
-          localVideo.classList.remove('hidden');
-          localAvatarBox.classList.add('hidden');
+          if (localVideo) {
+            localVideo.srcObject = screenStream;
+            localVideo.classList.remove('hidden');
+          }
+          if (localAvatarBox) localAvatarBox.classList.add('hidden');
 
           if (state.call?.peerConnection) {
             const sender = state.call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -1144,31 +1367,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (state.localStream) {
       const cameraTrack = state.localStream.getVideoTracks()[0];
-      localVideo.srcObject = state.localStream;
+      if (localVideo) localVideo.srcObject = state.localStream;
       if (cameraTrack && state.call?.peerConnection) {
         const sender = state.call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
         if (sender) sender.replaceTrack(cameraTrack);
       }
       if (!state.isVideoEnabled) {
-        localVideo.classList.add('hidden');
-        localAvatarBox.classList.remove('hidden');
+        if (localVideo) localVideo.classList.add('hidden');
+        if (localAvatarBox) localAvatarBox.classList.remove('hidden');
       }
     }
   }
 
-  btnToggleTTS.addEventListener('click', () => {
+  on(btnToggleTTS, 'click', () => {
     state.ttsEnabled = !state.ttsEnabled;
     if (state.ttsEnabled) {
-      btnToggleTTS.className = 'w-11 h-11 rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center transition active:scale-95';
+      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center transition active:scale-95';
       showNotification('Voz sintetizada ativada');
     } else {
-      btnToggleTTS.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center transition active:scale-95';
+      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center transition active:scale-95';
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       showNotification('Voz sintetizada desativada');
     }
   });
 
-  btnCopyInvite.addEventListener('click', () => {
+  on('btnCopyInvite', 'click', () => {
     const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomId}`;
     navigator.clipboard.writeText(inviteUrl).then(() => {
       showNotification('Link copiado!');
@@ -1177,8 +1400,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  btnEndCall.addEventListener('click', () => {
-    if (confirm('Deseja encerrar a ligação?')) {
+  on('btnEndCall', 'click', () => {
+    if (confirm('Deseja encerrar a ligação? O histórico será arquivado.')) {
       cleanupAndExitCall();
     }
   });
@@ -1188,6 +1411,10 @@ document.addEventListener('DOMContentLoaded', () => {
     stopSecondCamera();
     stopRecording();
     clearInterval(state.timerInterval);
+
+    // SALVA A REUNIÃO ATUAL NO ARQUIVO PERSISTENTE ANTES DE SAIR
+    const duration = callTimerDisplay ? callTimerDisplay.textContent : '00:00';
+    saveCallToArchive(state.roomId, duration, state.transcriptHistory);
 
     if (speechRecognizer) {
       try { speechRecognizer.stop(); } catch(e) {}
@@ -1199,11 +1426,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.dataConnection) state.dataConnection.close();
     if (state.peer) state.peer.destroy();
 
-    mainHeader.classList.remove('hidden');
-    callScreen.classList.add('hidden');
-    lobbyScreen.classList.remove('hidden');
+    if (mainHeader) mainHeader.classList.remove('hidden');
+    if (callScreen) callScreen.classList.add('hidden');
+    if (lobbyScreen) lobbyScreen.classList.remove('hidden');
     updateConnectionBadge('Desconectado', 'ready');
     window.history.pushState({}, '', window.location.pathname);
+    showNotification('Reunião finalizada e salva em "Reuniões Passadas"!');
   }
 
   function showNotification(msg) {
