@@ -231,15 +231,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // ALTERNADOR DE TEMAS VISUAIS
   // ==========================================
+  // Três temas neutros: mesmo desenho, temperatura de cor diferente (sem gradientes)
   const themes = [
-    { name: 'Dark Indigo', bodyClass: 'bg-slate-950 text-slate-100' },
-    { name: 'Cyberpunk Neon', bodyClass: 'bg-black text-cyan-200' },
-    { name: 'Midnight Emerald', bodyClass: 'bg-zinc-950 text-emerald-200' }
+    { name: 'Escuro', bodyClass: 'bg-neutral-950 text-neutral-100', vars: { '--bg': '#0d0d0f', '--surface': '#16161a', '--line': '#2b2b31', '--fg': '#f4f4f6' } },
+    { name: 'Grafite', bodyClass: 'bg-neutral-950 text-neutral-100', vars: { '--bg': '#141518', '--surface': '#1c1d21', '--line': '#33343a', '--fg': '#eceef1' } },
+    { name: 'Claro', bodyClass: 'bg-white text-neutral-900', vars: { '--bg': '#f7f7f5', '--surface': '#ffffff', '--line': '#e2e2dd', '--fg': '#17171a' } }
   ];
   on('btnToggleTheme', 'click', () => {
     state.currentThemeIdx = (state.currentThemeIdx + 1) % themes.length;
     const currentTheme = themes[state.currentThemeIdx];
     document.body.className = `${currentTheme.bodyClass} h-screen w-screen flex flex-col font-sans antialiased overflow-hidden select-none`;
+    Object.entries(currentTheme.vars || {}).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
     showNotification('Tema: ' + currentTheme.name);
   });
 

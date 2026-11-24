@@ -3,7 +3,7 @@
  * Desenvolvido por Kaynan Monteiro
  */
 
-const CACHE_NAME = 'linguacall-cache-v5';
+const CACHE_NAME = 'linguacall-cache-v6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
