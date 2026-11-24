@@ -2640,7 +2640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         speechBuffer.lang = state.speakLang;
         speechBuffer.text = (speechBuffer.text ? speechBuffer.text + ' ' : '') + finalPart.trim();
         // fecha a frase 900ms depois da última parte final (pausa natural)
-        scheduleSpeechFlush(900);
+        scheduleSpeechFlush(450);
       } else if (interim.trim()) {
         // enquanto a pessoa fala sem parar, não deixa a frase crescer para sempre
         if (speechBuffer.text && Date.now() - (speechBuffer.flushAt || 0) > 7000) {
@@ -2750,7 +2750,8 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     liveCaptionList.appendChild(row);
     while (liveCaptionList.children.length > 120) liveCaptionList.removeChild(liveCaptionList.firstChild);
-    liveCaptionPanel.scrollTop = liveCaptionPanel.scrollHeight;
+    // rola só o painel de legendas (antes podia arrastar a página no celular)
+    if (liveCaptionPanel) liveCaptionPanel.scrollTop = liveCaptionPanel.scrollHeight;
   }
 
   function clearLiveCaptions() {
@@ -2800,11 +2801,33 @@ document.addEventListener('DOMContentLoaded', () => {
   // TRADUÇÃO EM TEMPO REAL
   // ==========================================
 
+  // fetch com tempo limite: um serviço lento não pode travar a frase
+  async function fetchWithTimeout(url, ms) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try {
+      return await fetch(url, { signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Cache de traduções: frases repetidas (cumprimentos, "oi", "tudo bem") saem na hora
+  const translationCache = new Map();
+  function cacheKey(text, src, tgt) { return src + '|' + tgt + '|' + text.trim().toLowerCase(); }
+
   async function translateText(text, fromLang, toLang) {
     const src = (fromLang || 'auto').split('-')[0].toLowerCase();
     const tgt = (toLang || 'pt').split('-')[0].toLowerCase();
 
     if (src === tgt && src !== 'auto') return text;
+
+    const key = cacheKey(text, src, tgt);
+    if (translationCache.has(key)) return translationCache.get(key);
+    const remember = (value) => {
+      if (value && translationCache.size < 400) translationCache.set(key, value);
+      return value;
+    };
 
     if (state.engine === 'gemini' && state.geminiKey) {
       try {
@@ -2818,26 +2841,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res.ok) {
           const json = await res.json();
           const t = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (t) return t;
+          if (t) return remember(t);
         }
       } catch (e) {}
     }
 
+    // Google primeiro: medido em 0,75s. MyMemory levava 1,5s+ e só entrava depois,
+    // então TODA frase esperava o mais lento primeiro. Agora a ordem é a do mais rápido.
     try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.responseData?.translatedText) return data.responseData.translatedText;
+      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${src}&tl=${tgt}&dt=t&q=${encodeURIComponent(text)}`;
+      const gRes = await fetchWithTimeout(gUrl, 4000);
+      if (gRes && gRes.ok) {
+        const gJson = await gRes.json();
+        if (gJson && gJson[0]) return remember(gJson[0].map(item => item[0]).join(''));
       }
     } catch (e) {}
 
     try {
-      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${src}&tl=${tgt}&dt=t&q=${encodeURIComponent(text)}`;
-      const gRes = await fetch(gUrl);
-      if (gRes.ok) {
-        const gJson = await gRes.json();
-        if (gJson && gJson[0]) return gJson[0].map(item => item[0]).join('');
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}`;
+      const res = await fetchWithTimeout(url, 5000);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.responseData?.translatedText) return remember(data.responseData.translatedText);
       }
     } catch (e) {}
 
@@ -2847,7 +2872,9 @@ document.addEventListener('DOMContentLoaded', () => {
   async function handleRemoteSpeech(data) {
     triggerSpeakingWave(false);
 
-    showRemoteCaption(data.sender || 'Colega', data.text, 'Traduzindo...');
+    // O TEXTO ORIGINAL aparece na hora, sem esperar a tradução.
+    // Antes a tela ficava 1,5-2s só com "Traduzindo..." e parecia travada.
+    showRemoteCaption(data.sender || 'Colega', data.text, data.translated || '…');
 
     const translated = data.translated || await translateText(data.text, data.lang, state.targetLang);
     diag.lastTranslateOk = !!translated;
@@ -2861,7 +2888,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     showRemoteCaption(data.sender || 'Colega', data.text, translated);
     addLiveCaption(data.sender || 'Colega', data.text, translated, false);
-    playSoftBeep();
+    setTimeout(playSoftBeep, 0);
 
     if (state.ttsEnabled) {
       speakText(translated, state.targetLang);
