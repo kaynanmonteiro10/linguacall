@@ -233,16 +233,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // Três temas neutros: mesmo desenho, temperatura de cor diferente (sem gradientes)
   const themes = [
-    { name: 'Escuro', bodyClass: 'bg-neutral-950 text-neutral-100', vars: { '--bg': '#0d0d0f', '--surface': '#16161a', '--line': '#2b2b31', '--fg': '#f4f4f6' } },
-    { name: 'Grafite', bodyClass: 'bg-neutral-950 text-neutral-100', vars: { '--bg': '#141518', '--surface': '#1c1d21', '--line': '#33343a', '--fg': '#eceef1' } },
-    { name: 'Claro', bodyClass: 'bg-white text-neutral-900', vars: { '--bg': '#f7f7f5', '--surface': '#ffffff', '--line': '#e2e2dd', '--fg': '#17171a' } }
+    { name: 'Escuro',  vars: { '--bg': '#0d0d0f', '--surface': '#16161a', '--raised': '#1d1d22', '--line': '#2b2b31', '--fg': '#f4f4f6', '--muted': '#9a9aa3' } },
+    { name: 'Grafite', vars: { '--bg': '#141518', '--surface': '#1c1d21', '--raised': '#24252a', '--line': '#33343a', '--fg': '#eceef1', '--muted': '#a2a4ab' } },
+    { name: 'Claro',   vars: { '--bg': '#f6f6f3', '--surface': '#ffffff', '--raised': '#eeeeea', '--line': '#e2e2dd', '--fg': '#17171a', '--muted': '#6b6b73' } }
   ];
+  function applyTheme(idx) {
+    const t = themes[idx];
+    Object.entries(t.vars).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+    document.documentElement.setAttribute('data-theme', t.name.toLowerCase());
+    try { localStorage.setItem('linguacall-theme', String(idx)); } catch (e) {}
+  }
+  // Aplica o tema salvo assim que o app abre
+  try {
+    const saved = parseInt(localStorage.getItem('linguacall-theme'), 10);
+    if (!isNaN(saved) && themes[saved]) { state.currentThemeIdx = saved; applyTheme(saved); }
+  } catch (e) {}
   on('btnToggleTheme', 'click', () => {
     state.currentThemeIdx = (state.currentThemeIdx + 1) % themes.length;
-    const currentTheme = themes[state.currentThemeIdx];
-    document.body.className = `${currentTheme.bodyClass} h-screen w-screen flex flex-col font-sans antialiased overflow-hidden select-none`;
-    Object.entries(currentTheme.vars || {}).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
-    showNotification('Tema: ' + currentTheme.name);
+    applyTheme(state.currentThemeIdx);
+    showNotification('Tema: ' + themes[state.currentThemeIdx].name);
   });
 
   // ==========================================
@@ -250,25 +259,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   on(tabChatAll, 'click', () => {
     state.activeTab = 'all';
-    tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
-    tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
-    document.getElementById('tabChatLive').className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    tabChatAll.className = 'flex-1 h-9 border-b-2 border-accent-500 text-neutral-100';
+    tabChatSaved.className = 'flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300';
+    document.getElementById('tabChatLive').className = 'flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300';
     switchChatPanel();
   });
 
   on(tabChatSaved, 'click', () => {
     state.activeTab = 'saved';
-    tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
-    tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
-    document.getElementById('tabChatLive').className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    tabChatSaved.className = 'flex-1 h-9 border-b-2 border-accent-500 text-neutral-100';
+    tabChatAll.className = 'flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300';
+    document.getElementById('tabChatLive').className = 'flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300';
     switchChatPanel();
   });
 
   on('tabChatLive', 'click', () => {
     state.activeTab = 'live';
-    document.getElementById('tabChatLive').className = 'flex-1 py-1.5 border-b-2 border-indigo-500 text-indigo-400 font-bold';
-    tabChatAll.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
-    tabChatSaved.className = 'flex-1 py-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+    document.getElementById('tabChatLive').className = 'flex-1 h-9 border-b-2 border-accent-500 text-neutral-100';
+    tabChatAll.className = 'flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300';
+    tabChatSaved.className = 'flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300';
     switchChatPanel();
   });
 
@@ -310,34 +319,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const msg = state.activeTab === 'saved'
         ? 'Nenhuma frase favoritada ainda.<br>Clique no ícone de marcador nas falas para salvar expressões aqui.'
         : 'Tudo o que for conversado e traduzido nesta chamada ficará gravado aqui.';
-      transcriptList.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">${msg}</div>`;
+      transcriptList.innerHTML = `<div class="text-center py-8 text-neutral-500 text-xs">${msg}</div>`;
       return;
     }
 
     itemsToDisplay.forEach((item, index) => {
       const realIndex = state.transcriptHistory.indexOf(item);
       const div = document.createElement('div');
-      div.className = `p-2.5 rounded-xl border ${
-        item.isSelf ? 'bg-indigo-950/40 border-indigo-900/60 ml-2' : 'bg-slate-950/70 border-slate-800 mr-2'
+      div.className = `p-2.5 rounded-lg border ${
+        item.isSelf ? 'bg-accent-950/40 border-accent-900/60 ml-2' : 'bg-neutral-950/70 border-neutral-800 mr-2'
       }`;
 
-      const senderColor = item.isSelf ? 'text-indigo-400' : 'text-emerald-400';
+      const senderColor = item.isSelf ? 'text-accent-400' : 'text-ok-400';
       const mainText = item.isSelf ? item.original : (item.translated || item.original);
       const subText = (!item.isSelf && item.translated) ? `Original: ${item.original}` : '';
-      const bookmarkColor = item.isSaved ? 'text-amber-400 fill-amber-400' : 'text-slate-500 hover:text-amber-400';
+      const bookmarkColor = item.isSaved ? 'text-accent-400 fill-amber-400' : 'text-neutral-500 hover:text-accent-400';
 
       div.innerHTML = `
         <div class="flex items-center justify-between mb-1">
           <span class="font-bold ${senderColor}">${escapeHtml(item.sender)}</span>
           <div class="flex items-center gap-1.5">
-            <span class="text-[10px] text-slate-500">${item.timestamp}</span>
+            <span class="text-[10px] text-neutral-500">${item.timestamp}</span>
             <button class="btnBookmarkVocab p-0.5 ${bookmarkColor} transition" data-idx="${realIndex}" title="Favoritar/Salvar Frase">
               <i data-lucide="bookmark" class="w-3 h-3"></i>
             </button>
           </div>
         </div>
-        <div class="text-slate-100 font-medium">${escapeHtml(mainText)}</div>
-        ${subText ? `<div class="text-[10px] text-slate-400 italic mt-0.5">${escapeHtml(subText)}</div>` : ''}
+        <div class="text-neutral-100 font-medium">${escapeHtml(mainText)}</div>
+        ${subText ? `<div class="text-[10px] text-neutral-400 italic mt-0.5">${escapeHtml(subText)}</div>` : ''}
       `;
       transcriptList.appendChild(div);
     });
@@ -498,7 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (records.length === 0) {
       if (summaryEl) summaryEl.classList.add('hidden');
-      savedCallsList.innerHTML = '<div class="text-center py-8 text-slate-500">Nenhuma reunião finalizada ainda.<br>Quando você fizer uma ligação, ela aparecerá arquivada aqui.</div>';
+      savedCallsList.innerHTML = '<div class="text-center py-8 text-neutral-500">Nenhuma reunião finalizada ainda.<br>Quando você fizer uma ligação, ela aparecerá arquivada aqui.</div>';
       return;
     }
 
@@ -523,27 +532,27 @@ document.addEventListener('DOMContentLoaded', () => {
       if (summaryEl) {
         summaryEl.classList.remove('hidden');
         summaryEl.innerHTML = totalHits === 0
-          ? `Nenhuma fala encontrada para <span class="text-slate-200 font-semibold">"${escapeHtml(query)}"</span>.`
-          : `<span class="text-emerald-400 font-semibold">${totalHits}</span> fala(s) encontrada(s) em <span class="text-emerald-400 font-semibold">${new Set(matches.map(x => x.rec.id)).size}</span> reunião(ões).`;
+          ? `Nenhuma fala encontrada para <span class="text-neutral-200 font-semibold">"${escapeHtml(query)}"</span>.`
+          : `<span class="text-ok-400 font-semibold">${totalHits}</span> fala(s) encontrada(s) em <span class="text-ok-400 font-semibold">${new Set(matches.map(x => x.rec.id)).size}</span> reunião(ões).`;
       }
 
       if (totalHits === 0) {
-        savedCallsList.innerHTML = '<div class="text-center py-6 text-slate-500 text-xs">Tente buscar por outra palavra da fala.</div>';
+        savedCallsList.innerHTML = '<div class="text-center py-6 text-neutral-500 text-xs">Tente buscar por outra palavra da fala.</div>';
         return;
       }
 
       matches.slice(0, 200).forEach(({ rec, msg }) => {
         const realIdx = records.indexOf(rec);
         const div = document.createElement('div');
-        div.className = 'p-2.5 bg-slate-950 border border-emerald-900/50 rounded-xl cursor-pointer hover:border-emerald-600/60 transition';
+        div.className = 'p-2.5 bg-neutral-950 border border-ok-900/50 rounded-lg cursor-pointer hover:border-ok-600/60 transition';
         div.innerHTML = `
-          <div class="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-            <span class="text-indigo-300 font-semibold">Sala: ${escapeHtml(rec.id)}</span>
+          <div class="flex items-center justify-between text-[10px] text-neutral-500 mb-1">
+            <span class="text-accent-300 font-semibold">Sala: ${escapeHtml(rec.id)}</span>
             <span>${escapeHtml(rec.date || '')}</span>
           </div>
-          <div class="text-[11px] font-semibold ${msg.isSelf ? 'text-indigo-400' : 'text-emerald-400'}">${escapeHtml(msg.sender || '')} <span class="text-slate-500 font-normal">${escapeHtml(msg.timestamp || '')}</span></div>
+          <div class="text-[11px] font-semibold ${msg.isSelf ? 'text-accent-400' : 'text-ok-400'}">${escapeHtml(msg.sender || '')} <span class="text-neutral-500 font-normal">${escapeHtml(msg.timestamp || '')}</span></div>
           <div class="text-white mt-0.5">${highlightText(msg.translated || msg.original || '', query)}</div>
-          ${msg.original && msg.translated ? `<div class="text-[10px] text-slate-400 italic mt-0.5">Original: ${escapeHtml(msg.original)}</div>` : ''}
+          ${msg.original && msg.translated ? `<div class="text-[10px] text-neutral-400 italic mt-0.5">Original: ${escapeHtml(msg.original)}</div>` : ''}
         `;
         div.addEventListener('click', () => openSpecificCallView(records[realIdx]));
         savedCallsList.appendChild(div);
@@ -555,22 +564,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function buildCallRow(rec, idx, records) {
     const item = document.createElement('div');
-    item.className = 'p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition';
+    item.className = 'p-3 bg-neutral-950 border border-neutral-800 rounded-lg flex items-center justify-between hover:border-neutral-700 transition';
     item.innerHTML = `
       <div class="flex-1 pr-3">
         <div class="font-bold text-white flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+          <span class="w-2 h-2 rounded-full bg-accent-500"></span>
           <span>Sala: ${escapeHtml(rec.id)}</span>
         </div>
-        <div class="text-[11px] text-slate-400 mt-0.5">
+        <div class="text-[11px] text-neutral-400 mt-0.5">
           ${escapeHtml(rec.date || '')} • Duração: ${escapeHtml(rec.duration || '00:00')} • ${rec.totalSpeeches || 0} falas
         </div>
       </div>
       <div class="flex items-center gap-1.5">
-        <button class="btnViewCall px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs transition" data-idx="${idx}">
+        <button class="btnViewCall px-2.5 py-1.5 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-xs transition" data-idx="${idx}">
           Ver Chat
         </button>
-        <button class="btnDeleteCall p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition" data-idx="${idx}" title="Excluir">
+        <button class="btnDeleteCall p-1.5 text-neutral-500 hover:text-danger-400 rounded-lg transition" data-idx="${idx}" title="Excluir">
           ✕
         </button>
       </div>
@@ -584,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!q) return safe;
     try {
       const pattern = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return safe.replace(new RegExp(pattern, 'gi'), (m) => `<mark class="bg-amber-400/30 text-amber-200 rounded px-0.5">${m}</mark>`);
+      return safe.replace(new RegExp(pattern, 'gi'), (m) => `<mark class="bg-accent-400/30 text-accent-200 rounded px-0.5">${m}</mark>`);
     } catch (e) {
       return safe;
     }
@@ -632,13 +641,13 @@ document.addEventListener('DOMContentLoaded', () => {
       body.innerHTML = '';
       record.messages.forEach(m => {
         const div = document.createElement('div');
-        div.className = 'p-2.5 bg-slate-950 border border-slate-800 rounded-xl';
-        const orig = m.original ? `<div class="text-[11px] text-slate-400 italic mt-0.5">Original: ${escapeHtml(m.original)}</div>` : '';
+        div.className = 'p-2.5 bg-neutral-950 border border-neutral-800 rounded-lg';
+        const orig = m.original ? `<div class="text-[11px] text-neutral-400 italic mt-0.5">Original: ${escapeHtml(m.original)}</div>` : '';
         const main = m.translated || m.original;
         div.innerHTML = `
           <div class="flex justify-between text-[11px] mb-1 font-semibold">
-            <span class="${m.isSelf ? 'text-indigo-400' : 'text-emerald-400'}">${escapeHtml(m.sender)}</span>
-            <span class="text-slate-500">${m.timestamp}</span>
+            <span class="${m.isSelf ? 'text-accent-400' : 'text-ok-400'}">${escapeHtml(m.sender)}</span>
+            <span class="text-neutral-500">${m.timestamp}</span>
           </div>
           <div class="text-white">${escapeHtml(main)}</div>
           ${orig}
@@ -757,10 +766,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!localVideo) return;
     if (state.isMirrored) {
       localVideo.classList.add('-scale-x-100');
-      btnMirrorLocalVideo?.classList.add('text-indigo-400');
+      btnMirrorLocalVideo?.classList.add('text-accent-400');
     } else {
       localVideo.classList.remove('-scale-x-100');
-      btnMirrorLocalVideo?.classList.remove('text-indigo-400');
+      btnMirrorLocalVideo?.classList.remove('text-accent-400');
     }
     applyBlurSetting();
   }
@@ -775,8 +784,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     const btn = document.getElementById('btnToggleBgBlur');
     if (btn) {
-      btn.classList.toggle('text-amber-300', state.enableBlur);
-      btn.classList.toggle('text-slate-300', !state.enableBlur);
+      btn.classList.toggle('text-accent-300', state.enableBlur);
+      btn.classList.toggle('text-neutral-300', !state.enableBlur);
       btn.title = state.enableBlur ? 'Desfocar fundo (ativado)' : 'Desfocar fundo';
     }
     if (checkBackgroundBlur) checkBackgroundBlur.checked = state.enableBlur;
@@ -824,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
           localVideo.classList.add('h-1/2');
         }
 
-        btnToggleDualCamera?.classList.add('text-emerald-400');
+        btnToggleDualCamera?.classList.add('text-ok-400');
         showNotification('Câmera dupla ativada!');
       } catch (err) {
         alert('Seu dispositivo não suporta abrir duas câmeras simultâneas no navegador.\nVocê pode usar o botão "Virar Câmera" na barra inferior para alternar!');
@@ -846,7 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localVideo.classList.remove('h-1/2');
       localVideo.classList.add('h-full');
     }
-    btnToggleDualCamera?.classList.remove('text-emerald-400');
+    btnToggleDualCamera?.classList.remove('text-ok-400');
   }
 
   // ==========================================
@@ -902,7 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       state.mediaRecorder.start(1000);
       state.isRecording = true;
-      btnRecordCall?.classList.add('bg-rose-600/30', 'text-rose-400');
+      btnRecordCall?.classList.add('bg-danger-600/30', 'text-danger-400');
       iconRecord?.setAttribute('data-lucide', 'square');
       try { lucide.createIcons(); } catch(e) {}
       showNotification('Gravação iniciada!');
@@ -915,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.mediaRecorder && state.isRecording) {
       state.mediaRecorder.stop();
       state.isRecording = false;
-      btnRecordCall?.classList.remove('bg-rose-600/30', 'text-rose-400');
+      btnRecordCall?.classList.remove('bg-danger-600/30', 'text-danger-400');
       iconRecord?.setAttribute('data-lucide', 'disc');
       try { lucide.createIcons(); } catch(e) {}
     }
@@ -1145,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (virtualRingLightOverlay) {
       if (isRingLightOn) {
         virtualRingLightOverlay.classList.remove('hidden');
-        if (iconRingLight) iconRingLight.classList.add('text-amber-300', 'fill-amber-400');
+        if (iconRingLight) iconRingLight.classList.add('text-accent-300', 'fill-amber-400');
         showNotification('Ring Light facial ativada!');
       } else {
         virtualRingLightOverlay.classList.add('hidden');
@@ -1241,11 +1250,11 @@ document.addEventListener('DOMContentLoaded', () => {
     connectionStatusText.textContent = text;
     connectionStatusBadge.className = 'px-2 py-0.5 rounded-full text-[11px] border flex items-center gap-1 ';
     if (type === 'connecting') {
-      connectionStatusBadge.className += 'border-amber-500/30 bg-amber-500/10 text-amber-400';
+      connectionStatusBadge.className += 'border-accent-500/30 bg-accent-500/10 text-accent-400';
     } else if (type === 'connected') {
-      connectionStatusBadge.className += 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400';
+      connectionStatusBadge.className += 'border-ok-500/30 bg-ok-500/10 text-ok-400';
     } else if (type === 'error') {
-      connectionStatusBadge.className += 'border-rose-500/30 bg-rose-500/10 text-rose-400';
+      connectionStatusBadge.className += 'border-danger-500/30 bg-danger-500/10 text-danger-400';
     }
   }
 
@@ -1339,7 +1348,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (localAvatarBox) localAvatarBox.classList.add('hidden');
     if (btnToggleCamera) {
-      btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
+      btnToggleCamera.className = 'w-11 h-11 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center justify-center border border-neutral-700 transition active:scale-95';
     }
     if (iconCamera) iconCamera.setAttribute('data-lucide', 'video');
     applyMirrorSetting();
@@ -1374,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.activeTab = 'live';
     switchChatPanel();
     if (callNotesPanel) callNotesPanel.classList.add('hidden');
-    document.getElementById('btnCallNotes')?.classList.remove('text-amber-300');
+    document.getElementById('btnCallNotes')?.classList.remove('text-accent-300');
     setNetworkUI(null);
 
     state.callStartTime = Date.now();
@@ -1644,16 +1653,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!pingDisplay) return;
 
     pingDisplay.textContent = ms === null ? '--' : `${ms}ms`;
-    let color = 'bg-slate-500';
-    let textColor = 'text-slate-400';
+    let color = 'bg-neutral-500';
+    let textColor = 'text-neutral-400';
     if (ms !== null) {
-      if (ms < 150) { color = 'bg-emerald-400'; textColor = 'text-emerald-400'; }
-      else if (ms < 350) { color = 'bg-amber-400'; textColor = 'text-amber-400'; }
-      else { color = 'bg-rose-500'; textColor = 'text-rose-400'; }
+      if (ms < 150) { color = 'bg-ok-400'; textColor = 'text-ok-400'; }
+      else if (ms < 350) { color = 'bg-accent-400'; textColor = 'text-accent-400'; }
+      else { color = 'bg-danger-500'; textColor = 'text-danger-400'; }
     }
     if (networkDot) networkDot.className = `w-1.5 h-1.5 rounded-full ${color}`;
     if (badge) {
-      badge.classList.remove('text-emerald-400', 'text-amber-400', 'text-rose-400', 'text-slate-400');
+      badge.classList.remove('text-ok-400', 'text-accent-400', 'text-danger-400', 'text-neutral-400');
       badge.classList.add(textColor);
       badge.title = ms === null ? 'Sem resposta da rede' : `Qualidade da conexão: ${ms}ms`;
     }
@@ -1905,17 +1914,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!liveCaptionList) return;
     if (liveCaptionEmpty) liveCaptionEmpty.classList.add('hidden');
     const row = document.createElement('div');
-    row.className = 'p-2 rounded-xl border ' + (isSelf
-      ? 'bg-indigo-950/50 border-indigo-900/60'
-      : 'bg-slate-950/80 border-emerald-900/50');
+    row.className = 'p-2 rounded-lg border ' + (isSelf
+      ? 'bg-accent-950/50 border-accent-900/60'
+      : 'bg-neutral-950/80 border-ok-900/50');
     row.innerHTML = `
       <div class="flex items-center justify-between mb-0.5">
-        <span class="font-bold ${isSelf ? 'text-indigo-400' : 'text-emerald-400'}">${escapeHtml(speaker)}</span>
-        <span class="text-[10px] text-slate-500">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        <span class="font-bold ${isSelf ? 'text-accent-400' : 'text-ok-400'}">${escapeHtml(speaker)}</span>
+        <span class="text-[10px] text-neutral-500">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       <div class="text-white leading-snug">${escapeHtml(translated || original || '')}</div>
       ${original && translated && original !== translated
-        ? `<div class="text-[10px] text-slate-400 italic mt-0.5">Original: ${escapeHtml(original)}</div>` : ''}
+        ? `<div class="text-[10px] text-neutral-400 italic mt-0.5">Original: ${escapeHtml(original)}</div>` : ''}
     `;
     liveCaptionList.appendChild(row);
     while (liveCaptionList.children.length > 120) liveCaptionList.removeChild(liveCaptionList.firstChild);
@@ -2146,6 +2155,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // CONTROLES DE MÍDIA
   // ==========================================
 
+  // Só mostra "Virar câmera" quando existe mais de uma câmera no aparelho
+  async function updateFlipCameraVisibility() {
+    const btn = document.getElementById('btnFlipCamera');
+    if (!btn || !navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      if (cams.length > 1) {
+        btn.classList.remove('hidden');
+        btn.classList.add('flex');
+      } else {
+        btn.classList.add('hidden');
+        btn.classList.remove('flex');
+      }
+    } catch (e) {}
+  }
+  updateFlipCameraVisibility();
+
   on('btnFlipCamera', 'click', async () => {
     if (!state.localStream || !state.isVideoEnabled) {
       showNotification('Ligue a câmera primeiro para alternar.');
@@ -2190,13 +2217,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (state.isMuted) {
-      if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-rose-600/30 text-rose-400 border border-rose-500/50 flex items-center justify-center transition active:scale-95';
+      if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-danger-500/15 text-danger-400 flex items-center justify-center transition active:scale-95';
       if (iconMic) iconMic.setAttribute('data-lucide', 'mic-off');
       if (speechRecognizer && isRecognitionRunning) {
         try { speechRecognizer.stop(); } catch(e) {}
       }
     } else {
-      if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
+      if (btnToggleMic) btnToggleMic.className = 'w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-100 flex items-center justify-center transition active:scale-95';
       if (iconMic) iconMic.setAttribute('data-lucide', 'mic');
       if (speechRecognizer && !isRecognitionRunning) {
         try { speechRecognizer.start(); } catch(e) {}
@@ -2232,12 +2259,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.isVideoEnabled) {
       if (localVideo) localVideo.classList.remove('hidden');
       if (localAvatarBox) localAvatarBox.classList.add('hidden');
-      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 transition active:scale-95';
+      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center justify-center border border-neutral-700 transition active:scale-95';
       if (iconCamera) iconCamera.setAttribute('data-lucide', 'video');
     } else {
       if (localVideo) localVideo.classList.add('hidden');
       if (localAvatarBox) localAvatarBox.classList.remove('hidden');
-      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-rose-600/30 text-rose-400 border border-rose-500/50 flex items-center justify-center transition active:scale-95';
+      if (btnToggleCamera) btnToggleCamera.className = 'w-11 h-11 rounded-full bg-danger-600/30 text-danger-400 border border-danger-500/50 flex items-center justify-center transition active:scale-95';
       if (iconCamera) iconCamera.setAttribute('data-lucide', 'video-off');
     }
 
@@ -2264,7 +2291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sender) sender.replaceTrack(screenTrack);
           }
 
-          btnShareScreen.className = 'w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center transition active:scale-95';
+          btnShareScreen.className = 'w-11 h-11 rounded-full bg-accent-500 text-[#0d0d0f] flex items-center justify-center transition active:scale-95';
           screenTrack.onended = () => stopScreenShare();
         } catch (e) {}
       } else {
@@ -2280,7 +2307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     state.isSharingScreen = false;
     if (btnShareScreen) {
-      btnShareScreen.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 transition active:scale-95 hidden sm:flex';
+      btnShareScreen.className = 'w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-300 flex items-center justify-center transition active:scale-95 hidden sm:flex';
     }
 
     if (state.localStream) {
@@ -2300,10 +2327,10 @@ document.addEventListener('DOMContentLoaded', () => {
   on(btnToggleTTS, 'click', () => {
     state.ttsEnabled = !state.ttsEnabled;
     if (state.ttsEnabled) {
-      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center transition active:scale-95';
+      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-ok-600/20 text-ok-300 border border-ok-500/30 flex items-center justify-center transition active:scale-95';
       showNotification('Voz sintetizada ativada');
     } else {
-      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center transition active:scale-95';
+      if (btnToggleTTS) btnToggleTTS.className = 'w-11 h-11 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 flex items-center justify-center transition active:scale-95';
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       showNotification('Voz sintetizada desativada');
     }
@@ -2388,7 +2415,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!callNotesPanel) return;
     const willOpen = callNotesPanel.classList.contains('hidden');
     callNotesPanel.classList.toggle('hidden', !willOpen);
-    document.getElementById('btnCallNotes')?.classList.toggle('text-amber-300', willOpen);
+    document.getElementById('btnCallNotes')?.classList.toggle('text-accent-300', willOpen);
     if (willOpen) {
       if (window.innerWidth < 768) state.isChatDrawerOpen = false;
       updateChatDrawerUI();
@@ -2400,7 +2427,7 @@ document.addEventListener('DOMContentLoaded', () => {
   on('btnCloseCallNotes', 'click', () => {
     saveCallNotes(state.roomId);
     callNotesPanel?.classList.add('hidden');
-    document.getElementById('btnCallNotes')?.classList.remove('text-amber-300');
+    document.getElementById('btnCallNotes')?.classList.remove('text-accent-300');
   });
 
   if (callNotesText) {
@@ -2426,7 +2453,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showNotification(msg) {
     const toast = document.createElement('div');
-    toast.className = 'fixed top-14 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-3.5 py-2 rounded-xl shadow-2xl text-xs z-50 flex items-center gap-1.5 border border-indigo-400/50 animate-bounce';
+    toast.className = 'fixed top-14 left-1/2 -translate-x-1/2 bg-accent-600 text-white px-3.5 py-2 rounded-lg shadow-2xl text-xs z-50 flex items-center gap-1.5 border border-accent-400/50 animate-bounce';
     toast.innerHTML = `<span>${escapeHtml(msg)}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2500);
