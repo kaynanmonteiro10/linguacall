@@ -2064,6 +2064,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (hint && !SpeechRecognition) {
       hint.textContent = 'Este navegador não tem reconhecimento de voz (o iPhone/Safari não tem). Sem ele, a fala do colega não é transcrita nem traduzida automaticamente: ele precisa digitar no chat ou usar o botão "Falar meu texto traduzido".';
     }
+    // dicas iniciais imediatas para nenhuma linha ficar com "—"
+    const micH0 = document.getElementById('diagMicHint');
+    if (micH0 && !state.localStream) micH0.textContent = 'Nenhum microfone ativo nesta tela.';
+    const sendH0 = document.getElementById('diagSendHint');
+    if (sendH0 && !diag.lastLocalSentAt) sendH0.textContent = 'A escuta está ligada; assim que você falar, a frase aparece aqui e é enviada ao colega.';
     const tHint = document.getElementById('diagTranslateHint');
     if (tHint && diag.lastTranslateOk === null) tHint.textContent = 'Nenhuma tradução foi feita nesta chamada ainda.';
     const vHint = document.getElementById('diagVoiceHint');
