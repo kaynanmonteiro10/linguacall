@@ -1024,12 +1024,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (selectSpeakLang) selectSpeakLang.value = state.speakLang;
     if (localLangBadge) localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
 
-    if (speechRecognizer) {
-      speechRecognizer.lang = state.speakLang;
-      if (isRecognitionRunning) {
-        try { speechRecognizer.stop(); } catch(err) {}
-      }
-    }
+    // Reinicia a escuta com o idioma novo — antes ela parava e não voltava
+    state.speechBlocked = false;
+    restartSpeechRecognition(null);
 
     sendData({ type: 'lang_change', speakLang: state.speakLang });
     showNotification('Você agora fala em: ' + state.speakLang);
@@ -1171,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (e.key === 'Escape') {
       [aboutCreatorModal, settingsModal, savedCallsModal, viewSpecificCallModal, statsModal, filtersModal].forEach(m => m?.classList.add('hidden'));
+      closeVoiceDiag();
       return;
     }
 
@@ -1187,6 +1185,9 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         document.getElementById('btnToggleFullscreen')?.click();
+      } else if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        document.getElementById('btnVoiceDiag')?.click();
       }
     }
   });
@@ -1468,6 +1469,8 @@ document.addEventListener('DOMContentLoaded', () => {
         connectToPeer(roomId);
       }
       if (!speechRecognizer) initSpeechRecognition();
+      updateVoiceDiag();
+      updateSpeechWarningBar();
     });
 
     state.peer.on('call', (incomingCall) => {
@@ -1824,6 +1827,243 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
+  // DIAGNÓSTICO DE VOZ (o que está travando a conversa)
+  // ==========================================
+  const diag = {
+    isListening: false,
+    speechError: null,
+    lastErrorAt: 0,
+    micLevel: 0,
+    micPeak: 0,
+    lastTranslateOk: null,
+    lastTranslateAt: 0,
+    lastTranslateFrom: '',
+    lastTranslateTo: '',
+    voiceError: null,
+    lastSpokenLang: '',
+    lastSpokenVoice: '',
+    lastSpokenAt: 0,
+    lastRemoteAt: 0,
+    lastRemoteText: '',
+    lastRemoteTranslated: ''
+  };
+
+  function diagSet(id, text, colorClass) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'text-[11px] font-medium ' + (colorClass || 'text-neutral-400');
+  }
+
+  function updateSpeechWarningBar() {
+    const bar = document.getElementById('speechWarningBar');
+    const text = document.getElementById('speechWarningText');
+    if (!bar || !text) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      text.textContent = 'Este navegador (iPhone/Safari) não reconhece voz: o colega precisa digitar no chat ou usar "Falar meu texto traduzido".';
+      bar.classList.remove('hidden');
+    } else if (state.speechBlocked) {
+      text.textContent = 'O navegador bloqueou a escuta do microfone. Libere a permissão e recarregue a página.';
+      bar.classList.remove('hidden');
+    } else {
+      bar.classList.add('hidden');
+    }
+  }
+
+  function updateVoiceDiag() {
+    const modal = document.getElementById('voiceDiagModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+
+    // 1) Escuta
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      diagSet('diagSpeechStatus', 'Indisponível', 'text-danger-400');
+      const hint = document.getElementById('diagSpeechHint');
+      if (hint) hint.textContent = 'Este navegador não tem reconhecimento de voz (o iPhone/Safari não tem). Sem ele, a fala do colega não é transcrita nem traduzida automaticamente: ele precisa digitar no chat ou usar o botão "Falar meu texto traduzido".';
+    } else if (state.speechBlocked) {
+      diagSet('diagSpeechStatus', 'Bloqueada', 'text-danger-400');
+      const hint = document.getElementById('diagSpeechHint');
+      if (hint) hint.textContent = 'O navegador bloqueou a escuta. Toque no cadeado ao lado do endereço, libere o microfone, recarregue a página e entre na sala de novo.';
+    } else if (isRecognitionRunning) {
+      diagSet('diagSpeechStatus', 'Ouvindo', 'text-ok-400');
+      const hint = document.getElementById('diagSpeechHint');
+      if (hint) hint.textContent = `Escutando em ${state.speakLang}. Se você fala outro idioma, troque em "Falo" — a escuta reinicia sozinha.`;
+    } else {
+      diagSet('diagSpeechStatus', 'Parada', 'text-danger-400');
+      const hint = document.getElementById('diagSpeechHint');
+      if (hint) hint.textContent = diag.speechError
+        ? `A escuta parou com o erro "${diag.speechError}". Toque em "Testar agora" para religar.`
+        : 'A escuta está parada. Toque em "Testar agora" para religar.';
+    }
+
+    // 2) Microfone
+    const level = Math.round(diag.micLevel);
+    const bar = document.getElementById('diagMicBar');
+    if (bar) bar.style.width = Math.min(100, Math.round(diag.micLevel * 1.6)) + '%';
+    const micHint = document.getElementById('diagMicHint');
+    if (state.isMuted) {
+      diagSet('diagMicStatus', 'Mudo', 'text-danger-400');
+      if (micHint) micHint.textContent = 'Seu microfone está mutado: toque no ícone do microfone para liberar.';
+    } else if (!state.localStream) {
+      diagSet('diagMicStatus', 'Inativo', 'text-danger-400');
+      if (micHint) micHint.textContent = 'Nenhum microfone ativo. Saia e entre de novo liberando o microfone.';
+    } else if (diag.micPeak < 6) {
+      diagSet('diagMicStatus', 'Sem som', 'text-accent-400');
+      if (micHint) micHint.textContent = 'O microfone está ligado mas não captou som. Fale algo perto dele ou verifique se outro app está usando o microfone.';
+    } else {
+      diagSet('diagMicStatus', `Captando (${level})`, 'text-ok-400');
+      if (micHint) micHint.textContent = 'O microfone está captando a sua voz normalmente.';
+    }
+
+    // 3) Tradução
+    if (diag.lastTranslateOk === true) {
+      diagSet('diagTranslateStatus', 'Funcionando', 'text-ok-400');
+      const h = document.getElementById('diagTranslateHint');
+      if (h) h.textContent = `Última tradução ${diag.lastTranslateFrom} → ${diag.lastTranslateTo} deu certo.`;
+    } else if (diag.lastTranslateOk === false) {
+      diagSet('diagTranslateStatus', 'Falhou', 'text-danger-400');
+      const h = document.getElementById('diagTranslateHint');
+      if (h) h.textContent = 'O serviço de tradução não respondeu agora há pouco. Ele volta sozinho; se insistir, tente de novo em alguns segundos.';
+    } else {
+      diagSet('diagTranslateStatus', 'Ainda não usada', 'text-neutral-400');
+      const h = document.getElementById('diagTranslateHint');
+      if (h) h.textContent = 'Nenhuma tradução foi feita nesta chamada ainda.';
+    }
+
+    // 4) Voz de leitura
+    const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
+    const hasVoice = !!pickVoice(state.targetLang);
+    if (diag.voiceError) {
+      diagSet('diagVoiceStatus', 'Com erro', 'text-danger-400');
+      const h = document.getElementById('diagVoiceHint');
+      if (h) h.textContent = `A voz falhou ("${diag.voiceError}"). No iPhone, o som só sai depois de um toque na tela — toque em "Testar agora".`;
+    } else if (!voices.length) {
+      diagSet('diagVoiceStatus', 'Carregando', 'text-neutral-400');
+      const h = document.getElementById('diagVoiceHint');
+      if (h) h.textContent = 'O navegador ainda não carregou as vozes do aparelho.';
+    } else if (!hasVoice) {
+      diagSet('diagVoiceStatus', 'Sem voz do idioma', 'text-accent-400');
+      const h = document.getElementById('diagVoiceHint');
+      if (h) h.textContent = `Seu aparelho não tem voz instalada para "${state.targetLang}". A tradução aparece escrita, mas não será falada.`;
+    } else {
+      diagSet('diagVoiceStatus', state.ttsEnabled ? 'Ligada' : 'Desligada', state.ttsEnabled ? 'text-ok-400' : 'text-neutral-400');
+      const h = document.getElementById('diagVoiceHint');
+      if (h) h.textContent = state.ttsEnabled
+        ? `Lendo a tradução em ${state.targetLang} com a voz "${pickVoice(state.targetLang).name}".`
+        : 'Ligada a leitura: o botão de alto-falante na barra de baixo (voz lendo a tradução).';
+    }
+
+    // 5) Última fala do colega
+    if (diag.lastRemoteAt) {
+      const secs = Math.round((Date.now() - diag.lastRemoteAt) / 1000);
+      const ago = secs < 60 ? `${secs}s atrás` : `${Math.round(secs / 60)}min atrás`;
+      diagSet('diagRemoteStatus', `Recebida (${ago})`, 'text-ok-400');
+      const h = document.getElementById('diagRemoteHint');
+      if (h) h.textContent = `"${(diag.lastRemoteText || '').slice(0, 80)}" → "${(diag.lastRemoteTranslated || '').slice(0, 80)}"`;
+    } else {
+      diagSet('diagRemoteStatus', 'Nada recebido', 'text-neutral-400');
+      const h = document.getElementById('diagRemoteHint');
+      if (h) h.textContent = 'Nenhuma fala do colega chegou. Se ele fala pelo celular, o reconhecimento de voz não existe no iPhone/Safari — ele precisa digitar ou usar "Falar meu texto traduzido".';
+    }
+  }
+
+  // Medidor contínuo do microfone (só enquanto o diagnóstico está aberto)
+  let diagMeterTimer = null;
+  let diagAudioCtx = null;
+  function startDiagMeter() {
+    stopDiagMeter();
+    if (!state.localStream) { updateVoiceDiag(); return; }
+    const track = state.localStream.getAudioTracks()[0];
+    if (!track) { updateVoiceDiag(); return; }
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      diagAudioCtx = new Ctx();
+      const analyser = diagAudioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      diagAudioCtx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+      const arr = new Uint8Array(analyser.frequencyBinCount);
+      diagMeterTimer = setInterval(() => {
+        analyser.getByteFrequencyData(arr);
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) sum += arr[i];
+        diag.micLevel = sum / arr.length;
+        diag.micPeak = Math.max(diag.micPeak, diag.micLevel);
+        updateVoiceDiag();
+      }, 150);
+    } catch (e) { updateVoiceDiag(); }
+  }
+  function stopDiagMeter() {
+    if (diagMeterTimer) { clearInterval(diagMeterTimer); diagMeterTimer = null; }
+    if (diagAudioCtx) { diagAudioCtx.close().catch(() => {}); diagAudioCtx = null; }
+  }
+
+  function openVoiceDiag() {
+    document.getElementById('voiceDiagModal')?.classList.remove('hidden');
+    updateSpeechWarningBar();
+    diag.micPeak = 0;
+    updateVoiceDiag();
+    // preenche as dicas com o estado real, sem esperar um clique
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const hint = document.getElementById('diagSpeechHint');
+    if (hint && !SpeechRecognition) {
+      hint.textContent = 'Este navegador não tem reconhecimento de voz (o iPhone/Safari não tem). Sem ele, a fala do colega não é transcrita nem traduzida automaticamente: ele precisa digitar no chat ou usar o botão "Falar meu texto traduzido".';
+    }
+    const tHint = document.getElementById('diagTranslateHint');
+    if (tHint && diag.lastTranslateOk === null) tHint.textContent = 'Nenhuma tradução foi feita nesta chamada ainda.';
+    const vHint = document.getElementById('diagVoiceHint');
+    if (vHint) {
+      const hasVoice = ('speechSynthesis' in window) && !!pickVoice(state.targetLang);
+      vHint.textContent = hasVoice
+        ? `Seu aparelho tem voz para ${state.targetLang}. Ligue a leitura no botão de alto-falante da barra de baixo.`
+        : `Seu aparelho não tem voz instalada para ${state.targetLang}: a tradução aparece escrita, mas não será falada.`;
+    }
+    startDiagMeter();
+    // destrava o áudio do iPhone com este toque
+    if ('speechSynthesis' in window) {
+      try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
+    }
+  }
+  function closeVoiceDiag() {
+    document.getElementById('voiceDiagModal')?.classList.add('hidden');
+    stopDiagMeter();
+  }
+
+  on('btnVoiceDiag', 'click', openVoiceDiag);
+  on('btnOpenVoiceDiagFromBar', 'click', openVoiceDiag);
+  on('btnCloseVoiceDiag', 'click', closeVoiceDiag);
+  on('btnCloseVoiceDiagBtn', 'click', closeVoiceDiag);
+
+  on('btnVoiceDiagTest', 'click', async () => {
+    diag.micPeak = 0;
+    diag.speechError = null;
+    state.speechBlocked = false;
+    // 1) religa a escuta
+    restartSpeechRecognition('Religando a escuta...');
+    // 2) testa a tradução de verdade
+    const sample = state.speakLang.startsWith('pt') ? 'Olá, esta é uma tradução de teste.' : 'Hello, this is a translation test.';
+    try {
+      const out = await translateText(sample, state.speakLang, state.targetLang);
+      diag.lastTranslateOk = out && out !== sample;
+      diag.lastTranslateFrom = state.speakLang;
+      diag.lastTranslateTo = state.targetLang;
+    } catch (e) { diag.lastTranslateOk = false; }
+    // 3) testa a voz de leitura
+    if ('speechSynthesis' in window) {
+      diag.voiceError = null;
+      const phrase = state.targetLang.startsWith('pt') ? 'Teste de voz funcionando.' : 'Voice test working.';
+      speakText(phrase, state.targetLang === 'pt' ? 'pt-BR' : (state.targetLang === 'en' ? 'en-US' : state.targetLang));
+    }
+    startDiagMeter();
+    setTimeout(updateVoiceDiag, 400);
+    showNotification('Teste rodando: fale algo agora.');
+  });
+
+  // ==========================================
   // RECONHECIMENTO DE FALA
   // ==========================================
   let speechRecognizer = null;
@@ -1847,6 +2087,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     speechRecognizer.onstart = () => {
       isRecognitionRunning = true;
+      diag.isListening = true;
+      diag.speechError = null;
+      updateVoiceDiag();
     };
 
     speechRecognizer.onresult = (event) => {
@@ -1891,16 +2134,64 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
 
-    speechRecognizer.onerror = () => {};
+    speechRecognizer.onerror = (event) => {
+      const code = event && event.error ? event.error : 'desconhecido';
+      diag.speechError = code;
+      diag.lastErrorAt = Date.now();
+      // Erros que o navegador não recupera sozinho
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        state.speechBlocked = true;
+        showNotificationOnce('mic-blocked', 'O navegador bloqueou o microfone para a escuta. Libere nas permissões do site e recarregue a página.');
+      } else if (code === 'audio-capture') {
+        showNotificationOnce('no-mic', 'Nenhum microfone foi encontrado pelo navegador.');
+      } else if (code === 'network') {
+        showNotificationOnce('rec-net', 'A escuta depende da internet e a conexão falhou. Vou tentar de novo.');
+      } else if (code === 'language-not-supported') {
+        showNotificationOnce('lang-ns', 'Este navegador não reconhece o idioma escolhido. Troque em "Falo" para PT ou EN.');
+      }
+      updateVoiceDiag();
+    };
 
     speechRecognizer.onend = () => {
       isRecognitionRunning = false;
+      diag.isListening = false;
+      updateVoiceDiag();
+      if (state.speechBlocked) return;
       if (state.autoRestartSpeech && !state.isMuted && state.localStream) {
-        try { speechRecognizer.start(); } catch(e) {}
+        setTimeout(() => {
+          if (!isRecognitionRunning && !state.isMuted && !state.speechBlocked) {
+            try { speechRecognizer.start(); } catch(e) {}
+          }
+        }, 400);
       }
     };
 
     try { speechRecognizer.start(); } catch(e) {}
+  }
+
+  // Reinicia a escuta já com o novo idioma (sem isso ela fica parada após a troca)
+  function restartSpeechRecognition(reason) {
+    if (state.speechUnsupported) return;
+    if (!speechRecognizer) { initSpeechRecognition(); return; }
+    try {
+      speechRecognizer.lang = state.speakLang;
+      if (isRecognitionRunning) speechRecognizer.stop();
+      // o onend reinicia sozinho; se não reiniciar em 1,2s, forçamos
+      setTimeout(() => {
+        if (!isRecognitionRunning && !state.isMuted && !state.speechBlocked && speechRecognizer) {
+          try { speechRecognizer.lang = state.speakLang; speechRecognizer.start(); } catch(e) {}
+        }
+      }, 1200);
+      if (reason) showNotification(reason);
+    } catch (e) {}
+  }
+
+  // Aviso repetido uma vez só (evita alerta em loop a cada reinício)
+  const shownNotices = new Set();
+  function showNotificationOnce(key, msg) {
+    if (shownNotices.has(key)) return;
+    shownNotices.add(key);
+    showNotification(msg);
   }
 
   // ==========================================
@@ -2028,6 +2319,14 @@ document.addEventListener('DOMContentLoaded', () => {
     showRemoteCaption(data.sender || 'Colega', data.text, 'Traduzindo...');
 
     const translated = await translateText(data.text, data.lang, state.targetLang);
+    diag.lastTranslateOk = !!translated;
+    diag.lastTranslateFrom = data.lang || '?';
+    diag.lastTranslateTo = state.targetLang;
+    diag.lastTranslateAt = Date.now();
+    diag.lastRemoteAt = Date.now();
+    diag.lastRemoteText = data.text || '';
+    diag.lastRemoteTranslated = translated || '';
+    updateVoiceDiag();
 
     showRemoteCaption(data.sender || 'Colega', data.text, translated);
     addLiveCaption(data.sender || 'Colega', data.text, translated, false);
@@ -2046,12 +2345,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Escolhe a voz certa do idioma (no iPhone, sem isso o Safari pode ficar mudo)
+  function pickVoice(langCode) {
+    const want = (langCode || 'pt-BR').toLowerCase();
+    const short = want.split('-')[0];
+    const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    if (!voices || !voices.length) return null;
+    return voices.find(v => v.lang && v.lang.toLowerCase() === want)
+        || voices.find(v => v.lang && v.lang.toLowerCase().replace('_', '-') === want)
+        || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(short))
+        || null;
+  }
+
   function speakText(text, langCode) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = langCode || 'pt-BR';
-    window.speechSynthesis.speak(utterance);
+    const voice = pickVoice(utterance.lang);
+    if (voice) utterance.voice = voice;
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onerror = (e) => {
+      diag.voiceError = (e && e.error) || 'erro';
+      updateVoiceDiag();
+    };
+    diag.lastSpokenLang = utterance.lang;
+    diag.lastSpokenVoice = voice ? voice.name : 'padrão do sistema';
+    diag.lastSpokenAt = Date.now();
+    try { window.speechSynthesis.speak(utterance); } catch (e) { diag.voiceError = 'não iniciou'; }
+    updateVoiceDiag();
+  }
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = () => updateVoiceDiag();
   }
 
   // ==========================================
@@ -2210,6 +2536,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on(btnToggleMic, 'click', () => {
     state.isMuted = !state.isMuted;
+    updateVoiceDiag();
     if (state.localStream) {
       state.localStream.getAudioTracks().forEach(track => {
         track.enabled = !state.isMuted;

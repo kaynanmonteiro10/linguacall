@@ -407,6 +407,9 @@
             <button id="btnTestMicInCall" class="p-1.5 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-raised transition" title="Testar meu microfone">
               <i data-lucide="mic" class="w-4 h-4"></i>
             </button>
+            <button id="btnVoiceDiag" class="p-1.5 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-raised transition" title="Diagnóstico de voz: por que minha fala não está entrando?">
+              <i data-lucide="activity" class="w-4 h-4"></i>
+            </button>
             <div class="hidden lg:flex items-center gap-1.5 px-1.5">
               <i data-lucide="volume-2" class="w-3.5 h-3.5 text-neutral-500"></i>
               <input type="range" id="sliderRemoteVolume" min="0" max="100" value="100" class="w-14 h-1 accent-accent-500 cursor-pointer" aria-label="Volume do colega">
@@ -444,6 +447,13 @@
               <span id="chatNotificationBadge" class="hidden absolute top-0.5 right-0.5 w-2 h-2 bg-accent-500 rounded-full"></span>
             </button>
           </div>
+        </div>
+
+        <!-- AVISO: navegador sem reconhecimento de voz / microfone bloqueado -->
+        <div id="speechWarningBar" class="hidden px-3 py-2 border-b border-line bg-surface flex items-center gap-2 flex-shrink-0 text-[11px] text-neutral-400">
+          <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-accent-500 flex-shrink-0"></i>
+          <span id="speechWarningText" class="flex-1 leading-snug">Este navegador não reconhece voz.</span>
+          <button id="btnOpenVoiceDiagFromBar" class="flex-shrink-0 px-2.5 h-7 rounded-md bg-raised hover:bg-line text-neutral-200 transition">Diagnóstico</button>
         </div>
 
         <!-- ÁREA DOS VÍDEOS: GRADE DE 2 COLUNAS NO COMPUTADOR / RESPONSIVO NO CELULAR -->
@@ -730,6 +740,100 @@
           <span>Baixar TXT</span>
         </button>
         <button id="btnCloseSpecificCallModalBtn" class="px-4 h-8 bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] rounded-md transition text-xs">Voltar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DIAGNÓSTICO DE VOZ (por que a fala não está entrando) -->
+  <div id="voiceDiagModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+    <div class="bg-surface border border-line rounded-lg max-w-lg w-full max-h-[88vh] flex flex-col p-5">
+      <div class="flex items-center justify-between pb-3 border-b border-line">
+        <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
+          <i data-lucide="activity" class="w-4 h-4 text-neutral-500"></i>
+          Diagnóstico de voz
+        </h3>
+        <button id="btnCloseVoiceDiag" class="text-neutral-500 hover:text-neutral-100 transition p-1" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto py-3 space-y-2 text-xs">
+        <!-- 1. Reconhecimento de voz -->
+        <div class="p-3 bg-bg rounded-lg border border-line">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-neutral-300 flex items-center gap-1.5">
+              <i data-lucide="mic" class="w-3.5 h-3.5 text-neutral-500"></i>
+              Escuta da minha voz
+            </span>
+            <span id="diagSpeechStatus" class="text-[11px] font-medium text-neutral-400">—</span>
+          </div>
+          <p id="diagSpeechHint" class="text-[11px] text-neutral-500 mt-1.5 leading-relaxed">—</p>
+        </div>
+
+        <!-- 2. Volume do microfone -->
+        <div class="p-3 bg-bg rounded-lg border border-line">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-neutral-300 flex items-center gap-1.5">
+              <i data-lucide="audio-lines" class="w-3.5 h-3.5 text-neutral-500"></i>
+              Microfone captando
+            </span>
+            <span id="diagMicStatus" class="text-[11px] font-medium text-neutral-400">—</span>
+          </div>
+          <div class="mt-2 h-1.5 w-full bg-raised rounded-full overflow-hidden">
+            <div id="diagMicBar" class="h-full bg-ok-500 transition-all" style="width:0%"></div>
+          </div>
+          <p id="diagMicHint" class="text-[11px] text-neutral-500 mt-1.5 leading-relaxed">Fale algo para medir.</p>
+        </div>
+
+        <!-- 3. Tradução -->
+        <div class="p-3 bg-bg rounded-lg border border-line">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-neutral-300 flex items-center gap-1.5">
+              <i data-lucide="languages" class="w-3.5 h-3.5 text-neutral-500"></i>
+              Tradução
+            </span>
+            <span id="diagTranslateStatus" class="text-[11px] font-medium text-neutral-400">—</span>
+          </div>
+          <p id="diagTranslateHint" class="text-[11px] text-neutral-500 mt-1.5 leading-relaxed">—</p>
+        </div>
+
+        <!-- 4. Voz de leitura -->
+        <div class="p-3 bg-bg rounded-lg border border-line">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-neutral-300 flex items-center gap-1.5">
+              <i data-lucide="volume-2" class="w-3.5 h-3.5 text-neutral-500"></i>
+              Voz que lê a tradução
+            </span>
+            <span id="diagVoiceStatus" class="text-[11px] font-medium text-neutral-400">—</span>
+          </div>
+          <p id="diagVoiceHint" class="text-[11px] text-neutral-500 mt-1.5 leading-relaxed">—</p>
+        </div>
+
+        <!-- 5. Última fala recebida -->
+        <div class="p-3 bg-bg rounded-lg border border-line">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-neutral-300 flex items-center gap-1.5">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-neutral-500"></i>
+              Última fala do colega
+            </span>
+            <span id="diagRemoteStatus" class="text-[11px] font-medium text-neutral-400">—</span>
+          </div>
+          <p id="diagRemoteHint" class="text-[11px] text-neutral-500 mt-1.5 leading-relaxed">Nada recebido ainda.</p>
+        </div>
+
+        <p class="text-[11px] text-neutral-500 leading-relaxed px-1">
+          Use o teste abaixo e me diga o que aparece em cada linha: com isso eu sei se o problema está no microfone, no reconhecimento, na tradução ou no alto-falante.
+        </p>
+      </div>
+
+      <div class="pt-3 border-t border-line flex items-center justify-between gap-2">
+        <button id="btnVoiceDiagTest" class="px-3.5 h-9 bg-raised hover:bg-line text-neutral-200 rounded-lg transition text-xs flex items-center gap-1.5">
+          <i data-lucide="play" class="w-3.5 h-3.5 text-neutral-500"></i>
+          Testar agora
+        </button>
+        <button id="btnCloseVoiceDiagBtn" class="px-5 h-9 bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] font-medium rounded-lg transition text-xs">
+          Fechar
+        </button>
       </div>
     </div>
   </div>
