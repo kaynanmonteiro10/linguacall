@@ -140,6 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
     geminiKey: localStorage.getItem('lc_gemini_key') || '',
     autoRestartSpeech: true,
     enableBeep: localStorage.getItem('lc_beep') !== 'false',
+    enableBlur: localStorage.getItem('lc_blur_bg') === 'true',
+    autoReconnect: localStorage.getItem('lc_auto_reconnect') !== 'false',
     currentThemeIdx: 0,
     activeTab: 'all', // 'all' ou 'saved'
     
@@ -151,7 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
     remoteStream: null,
     screenStream: null,
     roomId: null,
+    roomPin: '',
     isInitiator: false,
+    isReconnecting: false,
+    reconnectAttempts: 0,
     
     isMuted: false,
     isVideoEnabled: true,
@@ -186,12 +191,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputGeminiApiKey = document.getElementById('inputGeminiApiKey');
   const geminiKeyContainer = document.getElementById('geminiKeyContainer');
   const checkAudioBeep = document.getElementById('checkAudioBeep');
+  const checkBackgroundBlur = document.getElementById('checkBackgroundBlur');
+  const checkAutoReconnect = document.getElementById('checkAutoReconnect');
   if (selectTranslateEngine) selectTranslateEngine.value = state.engine;
   if (inputGeminiApiKey) inputGeminiApiKey.value = state.geminiKey;
   if (checkAudioBeep) checkAudioBeep.checked = state.enableBeep;
+  if (checkBackgroundBlur) checkBackgroundBlur.checked = state.enableBlur;
+  if (checkAutoReconnect) checkAutoReconnect.checked = state.autoReconnect;
   if (geminiKeyContainer && state.engine === 'gemini') geminiKeyContainer.classList.remove('hidden');
 
   applyMirrorSetting();
+  applyBlurSetting();
 
   const urlParams = new URLSearchParams(window.location.search);
   const roomFromUrl = urlParams.get('room');
@@ -399,41 +409,116 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {}
   }
 
-  function renderSavedCallsList() {
+  // ==========================================
+  // BUSCA NO HISTÓRICO DE REUNIÕES ANTIGAS
+  // ==========================================
+  function normalizeSearch(text) {
+    return (text || '').toString().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function renderSavedCallsList(query = '') {
     if (!savedCallsList) return;
     savedCallsList.innerHTML = '';
     const records = JSON.parse(localStorage.getItem('lc_saved_calls') || '[]');
-    
+    const q = normalizeSearch(query).trim();
+    const summaryEl = document.getElementById('searchCallsSummary');
+
     if (records.length === 0) {
+      if (summaryEl) summaryEl.classList.add('hidden');
       savedCallsList.innerHTML = '<div class="text-center py-8 text-slate-500">Nenhuma reunião finalizada ainda.<br>Quando você fizer uma ligação, ela aparecerá arquivada aqui.</div>';
       return;
     }
 
-    records.forEach((rec, idx) => {
-      const item = document.createElement('div');
-      item.className = 'p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition';
-      item.innerHTML = `
-        <div class="flex-1 pr-3">
-          <div class="font-bold text-white flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-            <span>Sala: ${escapeHtml(rec.id)}</span>
-          </div>
-          <div class="text-[11px] text-slate-400 mt-0.5">
-            ${rec.date} • Duração: ${rec.duration} • ${rec.totalSpeeches} falas
-          </div>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <button class="btnViewCall px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs transition" data-idx="${idx}">
-            Ver Chat
-          </button>
-          <button class="btnDeleteCall p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition" data-idx="${idx}" title="Excluir">
-            ✕
-          </button>
-        </div>
-      `;
-      savedCallsList.appendChild(item);
-    });
+    if (!q) {
+      if (summaryEl) summaryEl.classList.add('hidden');
+      records.forEach((rec, idx) => savedCallsList.appendChild(buildCallRow(rec, idx, records)));
+    } else {
+      // Busca dentro de todas as falas de todas as reuniões
+      let totalHits = 0;
+      const matches = [];
 
+      records.forEach((rec) => {
+        (rec.messages || []).forEach((m) => {
+          const haystack = normalizeSearch(`${m.original || ''} ${m.translated || ''} ${m.sender || ''}`);
+          if (haystack.includes(q)) {
+            matches.push({ rec: rec, msg: m });
+            totalHits++;
+          }
+        });
+      });
+
+      if (summaryEl) {
+        summaryEl.classList.remove('hidden');
+        summaryEl.innerHTML = totalHits === 0
+          ? `Nenhuma fala encontrada para <span class="text-slate-200 font-semibold">"${escapeHtml(query)}"</span>.`
+          : `<span class="text-emerald-400 font-semibold">${totalHits}</span> fala(s) encontrada(s) em <span class="text-emerald-400 font-semibold">${new Set(matches.map(x => x.rec.id)).size}</span> reunião(ões).`;
+      }
+
+      if (totalHits === 0) {
+        savedCallsList.innerHTML = '<div class="text-center py-6 text-slate-500 text-xs">Tente buscar por outra palavra da fala.</div>';
+        return;
+      }
+
+      matches.slice(0, 200).forEach(({ rec, msg }) => {
+        const realIdx = records.indexOf(rec);
+        const div = document.createElement('div');
+        div.className = 'p-2.5 bg-slate-950 border border-emerald-900/50 rounded-xl cursor-pointer hover:border-emerald-600/60 transition';
+        div.innerHTML = `
+          <div class="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+            <span class="text-indigo-300 font-semibold">Sala: ${escapeHtml(rec.id)}</span>
+            <span>${escapeHtml(rec.date || '')}</span>
+          </div>
+          <div class="text-[11px] font-semibold ${msg.isSelf ? 'text-indigo-400' : 'text-emerald-400'}">${escapeHtml(msg.sender || '')} <span class="text-slate-500 font-normal">${escapeHtml(msg.timestamp || '')}</span></div>
+          <div class="text-white mt-0.5">${highlightText(msg.translated || msg.original || '', query)}</div>
+          ${msg.original && msg.translated ? `<div class="text-[10px] text-slate-400 italic mt-0.5">Original: ${escapeHtml(msg.original)}</div>` : ''}
+        `;
+        div.addEventListener('click', () => openSpecificCallView(records[realIdx]));
+        savedCallsList.appendChild(div);
+      });
+    }
+
+    bindSavedCallActions(records);
+  }
+
+  function buildCallRow(rec, idx, records) {
+    const item = document.createElement('div');
+    item.className = 'p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition';
+    item.innerHTML = `
+      <div class="flex-1 pr-3">
+        <div class="font-bold text-white flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+          <span>Sala: ${escapeHtml(rec.id)}</span>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-0.5">
+          ${escapeHtml(rec.date || '')} • Duração: ${escapeHtml(rec.duration || '00:00')} • ${rec.totalSpeeches || 0} falas
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button class="btnViewCall px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs transition" data-idx="${idx}">
+          Ver Chat
+        </button>
+        <button class="btnDeleteCall p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition" data-idx="${idx}" title="Excluir">
+          ✕
+        </button>
+      </div>
+    `;
+    return item;
+  }
+
+  function highlightText(text, query) {
+    const safe = escapeHtml(text || '');
+    const q = (query || '').trim();
+    if (!q) return safe;
+    try {
+      const pattern = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return safe.replace(new RegExp(pattern, 'gi'), (m) => `<mark class="bg-amber-400/30 text-amber-200 rounded px-0.5">${m}</mark>`);
+    } catch (e) {
+      return safe;
+    }
+  }
+
+  function bindSavedCallActions(records) {
     document.querySelectorAll('.btnViewCall').forEach(b => {
       b.addEventListener('click', () => {
         const idx = parseInt(b.dataset.idx);
@@ -446,8 +531,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const idx = parseInt(b.dataset.idx);
         records.splice(idx, 1);
         localStorage.setItem('lc_saved_calls', JSON.stringify(records));
-        renderSavedCallsList();
+        renderSavedCallsList(document.getElementById('inputSearchCalls')?.value || '');
       });
+    });
+  }
+
+  let searchCallsTimer = null;
+  const inputSearchCalls = document.getElementById('inputSearchCalls');
+  if (inputSearchCalls) {
+    inputSearchCalls.addEventListener('input', (e) => {
+      clearTimeout(searchCallsTimer);
+      const value = e.target.value;
+      searchCallsTimer = setTimeout(() => renderSavedCallsList(value), 220);
     });
   }
 
@@ -595,7 +690,43 @@ document.addEventListener('DOMContentLoaded', () => {
       localVideo.classList.remove('-scale-x-100');
       btnMirrorLocalVideo?.classList.remove('text-indigo-400');
     }
+    applyBlurSetting();
   }
+
+  // ==========================================
+  // DESFOQUE DE FUNDO (PRIVACIDADE DO AMBIENTE)
+  // ==========================================
+  function applyBlurSetting() {
+    [localVideo, remoteVideo].forEach(v => {
+      if (!v) return;
+      v.classList.toggle('blur-background', state.enableBlur);
+    });
+    const btn = document.getElementById('btnToggleBgBlur');
+    if (btn) {
+      btn.classList.toggle('text-amber-300', state.enableBlur);
+      btn.classList.toggle('text-slate-300', !state.enableBlur);
+      btn.title = state.enableBlur ? 'Desfocar fundo (ativado)' : 'Desfocar fundo';
+    }
+    if (checkBackgroundBlur) checkBackgroundBlur.checked = state.enableBlur;
+  }
+
+  function toggleBackgroundBlur(showToast = true) {
+    state.enableBlur = !state.enableBlur;
+    localStorage.setItem('lc_blur_bg', state.enableBlur);
+    applyBlurSetting();
+    if (showToast) {
+      showNotification(state.enableBlur ? 'Fundo desfocado (privacidade)' : 'Desfoque de fundo desligado');
+    }
+  }
+
+  on('btnToggleBgBlur', 'click', () => toggleBackgroundBlur(true));
+
+  on(checkBackgroundBlur, 'change', (e) => {
+    state.enableBlur = e.target.checked;
+    localStorage.setItem('lc_blur_bg', state.enableBlur);
+    applyBlurSetting();
+    showNotification(state.enableBlur ? 'Fundo desfocado (privacidade)' : 'Desfoque de fundo desligado');
+  });
 
   on(btnToggleDualCamera, 'click', async () => {
     if (!state.isVideoEnabled) {
@@ -862,9 +993,14 @@ document.addEventListener('DOMContentLoaded', () => {
     state.engine = selectTranslateEngine ? selectTranslateEngine.value : 'mymemory';
     state.geminiKey = inputGeminiApiKey ? inputGeminiApiKey.value.trim() : '';
     state.enableBeep = checkAudioBeep ? checkAudioBeep.checked : true;
+    state.autoReconnect = checkAutoReconnect ? checkAutoReconnect.checked : true;
+    if (checkBackgroundBlur) state.enableBlur = checkBackgroundBlur.checked;
     localStorage.setItem('lc_engine', state.engine);
     localStorage.setItem('lc_gemini_key', state.geminiKey);
     localStorage.setItem('lc_beep', state.enableBeep);
+    localStorage.setItem('lc_blur_bg', state.enableBlur);
+    localStorage.setItem('lc_auto_reconnect', state.autoReconnect);
+    applyBlurSetting();
     settingsModal?.classList.add('hidden');
     showNotification('Configurações salvas!');
   });
@@ -1103,6 +1239,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (localUserAvatar) localUserAvatar.textContent = (state.userName[0] || 'V').toUpperCase();
     if (localLangBadge) localLangBadge.textContent = state.speakLang.split('-')[0].toUpperCase();
 
+    // Notas desta chamada (por sala)
+    loadCallNotes(roomId);
+    if (callNotesPanel) callNotesPanel.classList.add('hidden');
+    document.getElementById('btnCallNotes')?.classList.remove('text-amber-300');
+    setNetworkUI(null);
+
     state.callStartTime = Date.now();
     clearInterval(state.timerInterval);
     state.timerInterval = setInterval(() => {
@@ -1112,7 +1254,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (callTimerDisplay) callTimerDisplay.textContent = `${mins}:${secs}`;
     }, 1000);
 
-    const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+    const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}${state.roomPin ? '&pin=' + encodeURIComponent(state.roomPin) : ''}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
   }
 
@@ -1131,6 +1273,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on('btnCreateRoom', 'click', async () => {
     state.isInitiator = true;
+    state.roomPin = (document.getElementById('inputRoomPin')?.value || '').trim();
+    if (state.roomPin) localStorage.setItem('lc_room_pin', state.roomPin);
+    else localStorage.removeItem('lc_room_pin');
     const roomId = generateRoomId();
     await startCallFlow(roomId);
   });
@@ -1144,6 +1289,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (code.includes('?room=')) {
       code = code.split('?room=')[1].split('&')[0];
     }
+    const pinFromInput = (document.getElementById('inputRoomPin')?.value || '').trim();
+    const pinFromUrl = new URLSearchParams(window.location.search).get('pin') || '';
+    state.roomPin = pinFromInput || pinFromUrl || localStorage.getItem('lc_room_pin') || '';
     state.isInitiator = false;
     await startCallFlow(code);
   });
@@ -1155,48 +1303,128 @@ document.addEventListener('DOMContentLoaded', () => {
       await requestUserMedia(wantVideo, 'user');
 
       setupCallUI(roomId);
-
-      const peerId = state.isInitiator ? roomId : 'guest-' + Math.random().toString(36).substring(2, 8);
-      
-      state.peer = new Peer(peerId, {
-        debug: 1,
-        config: rtcConfig
-      });
-
-      state.peer.on('open', (id) => {
-        if (state.isInitiator) {
-          updateConnectionBadge('Aguardando colega...', 'connecting');
-          if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Aguardando colega...';
-          if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Envie o convite para o colega';
-        } else {
-          updateConnectionBadge('Conectando...', 'connecting');
-          connectToPeer(roomId);
-        }
-        initSpeechRecognition();
-      });
-
-      state.peer.on('call', (incomingCall) => {
-        state.call = incomingCall;
-        incomingCall.answer(state.localStream);
-        incomingCall.on('stream', (remoteMediaStream) => {
-          attachRemoteStream(remoteMediaStream);
-        });
-      });
-
-      state.peer.on('connection', (conn) => {
-        state.dataConnection = conn;
-        setupDataConnectionListeners(conn);
-      });
-
-      state.peer.on('error', (err) => {
-        console.error('Peer error:', err);
-        updateConnectionBadge('Erro na conexão', 'error');
-      });
-
+      createPeerConnection(roomId);
     } catch (e) {
       updateConnectionBadge('Permissão negada', 'error');
     }
   }
+
+  function createPeerConnection(roomId) {
+    const peerId = state.isInitiator ? roomId : 'guest-' + Math.random().toString(36).substring(2, 8);
+
+    state.peer = new Peer(peerId, {
+      debug: 1,
+      config: rtcConfig
+    });
+
+    state.peer.on('open', (id) => {
+      if (state.isInitiator) {
+        updateConnectionBadge('Aguardando colega...', 'connecting');
+        if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Aguardando colega...';
+        if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Envie o convite para o colega';
+      } else {
+        updateConnectionBadge('Conectando...', 'connecting');
+        connectToPeer(roomId);
+      }
+      if (!speechRecognizer) initSpeechRecognition();
+    });
+
+    state.peer.on('call', (incomingCall) => {
+      state.call = incomingCall;
+      incomingCall.answer(state.localStream);
+      incomingCall.on('stream', (remoteMediaStream) => {
+        attachRemoteStream(remoteMediaStream);
+      });
+    });
+
+    state.peer.on('connection', (conn) => {
+      state.dataConnection = conn;
+      setupDataConnectionListeners(conn);
+    });
+
+    state.peer.on('disconnected', () => {
+      updateConnectionBadge('Conexão instável...', 'connecting');
+      scheduleReconnect();
+    });
+
+    state.peer.on('error', (err) => {
+      console.error('Peer error:', err);
+      // Erro de ID já em uso: a sala dona do código está ocupada
+      if (err && err.type === 'unavailable-id') {
+        updateConnectionBadge('Sala ocupada ou PIN incorreto', 'error');
+        showNotification('Não foi possível entrar: sala ocupada ou PIN incorreto.');
+        setTimeout(() => cleanupAndExitCall(true), 2200);
+        return;
+      }
+      if (err && (err.type === 'peer-unavailable' || err.type === 'network')) {
+        updateConnectionBadge('Colega não encontrado', 'error');
+        showNotification('Colega não encontrado. Confira o código e o PIN.');
+        return;
+      }
+      updateConnectionBadge('Erro na conexão', 'error');
+      scheduleReconnect();
+    });
+  }
+
+  // ==========================================
+  // RECONEXÃO AUTOMÁTICA SE A CHAMADA CAIR
+  // ==========================================
+  function scheduleReconnect() {
+    if (!state.autoReconnect || !state.roomId || state.isReconnecting) return;
+    if (state.reconnectAttempts >= 12) {
+      updateConnectionBadge('Falha ao reconectar', 'error');
+      showNotification('Não foi possível reconectar automaticamente. Tente entrar de novo.');
+      return;
+    }
+
+    state.isReconnecting = true;
+    state.reconnectAttempts++;
+    const delay = Math.min(8000, 1200 * state.reconnectAttempts);
+    updateConnectionBadge(`Reconectando... (${state.reconnectAttempts})`, 'connecting');
+
+    setTimeout(() => {
+      if (!state.roomId || (!callScreen || callScreen.classList.contains('hidden'))) {
+        state.isReconnecting = false;
+        return;
+      }
+
+      try {
+        if (state.peer && !state.peer.destroyed) {
+          if (state.peer.disconnected && !state.peer.destroyed) {
+            state.peer.reconnect();
+          }
+        } else {
+          createPeerConnection(state.roomId);
+        }
+      } catch (e) {
+        try { createPeerConnection(state.roomId); } catch (err) {}
+      }
+
+      // Se em 4s o colega continuar fora, tenta de novo
+      setTimeout(() => {
+        state.isReconnecting = false;
+        const connected = state.dataConnection && state.dataConnection.open;
+        if (!connected) scheduleReconnect();
+        else state.reconnectAttempts = 0;
+      }, 4000);
+    }, delay);
+  }
+
+  window.addEventListener('online', () => {
+    if (state.roomId && callScreen && !callScreen.classList.contains('hidden')) {
+      showNotification('Internet voltou. Reconectando a chamada...');
+      state.reconnectAttempts = 0;
+      state.isReconnecting = false;
+      scheduleReconnect();
+    }
+  });
+
+  window.addEventListener('offline', () => {
+    if (state.roomId) {
+      updateConnectionBadge('Sem internet', 'error');
+      showNotification('Sua internet caiu. Tentaremos reconectar sozinhos.');
+    }
+  });
 
   function connectToPeer(hostRoomId) {
     const call = state.peer.call(hostRoomId, state.localStream);
@@ -1229,6 +1457,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     updateConnectionBadge('Conectado', 'connected');
     if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Conectado';
+    applyBlurSetting();
+    state.reconnectAttempts = 0;
+    state.isReconnecting = false;
+    startNetworkMonitor();
     playConnectChime();
   }
 
@@ -1241,6 +1473,10 @@ document.addEventListener('DOMContentLoaded', () => {
         speakLang: state.speakLang,
         hasVideo: state.isVideoEnabled
       });
+      // Quem entra na sala envia o PIN; o anfitrião confere
+      if (!state.isInitiator) {
+        sendData({ type: 'pin_check', pin: state.roomPin || '' });
+      }
     });
 
     conn.on('data', async (data) => {
@@ -1255,7 +1491,96 @@ document.addEventListener('DOMContentLoaded', () => {
       if (remoteVideo) remoteVideo.classList.add('hidden');
       if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
       hideRemoteCaption();
+      // Tenta retomar a chamada sozinho, sem precisar reiniciar tudo
+      if (state.roomId && !state.isInitiator) scheduleReconnect();
     });
+  }
+
+  // ==========================================
+  // ALERTA DE QUALIDADE DE REDE
+  // ==========================================
+  let pingInterval = null;
+  let pingSeq = 0;
+  let lastPongAt = 0;
+  let networkAlertShown = false;
+  let networkDownSince = 0;
+
+  function setNetworkUI(ms) {
+    const pingDisplay = document.getElementById('pingDisplay');
+    const networkDot = document.getElementById('networkDot');
+    const badge = document.getElementById('networkStatusBadge');
+    if (!pingDisplay) return;
+
+    pingDisplay.textContent = ms === null ? '--' : `${ms}ms`;
+    let color = 'bg-slate-500';
+    let textColor = 'text-slate-400';
+    if (ms !== null) {
+      if (ms < 150) { color = 'bg-emerald-400'; textColor = 'text-emerald-400'; }
+      else if (ms < 350) { color = 'bg-amber-400'; textColor = 'text-amber-400'; }
+      else { color = 'bg-rose-500'; textColor = 'text-rose-400'; }
+    }
+    if (networkDot) networkDot.className = `w-1.5 h-1.5 rounded-full ${color}`;
+    if (badge) {
+      badge.classList.remove('text-emerald-400', 'text-amber-400', 'text-rose-400', 'text-slate-400');
+      badge.classList.add(textColor);
+      badge.title = ms === null ? 'Sem resposta da rede' : `Qualidade da conexão: ${ms}ms`;
+    }
+  }
+
+  function startNetworkMonitor() {
+    stopNetworkMonitor();
+    lastPongAt = Date.now();
+    networkAlertShown = false;
+    networkDownSince = 0;
+
+    pingInterval = setInterval(() => {
+      if (!state.dataConnection || !state.dataConnection.open) {
+        setNetworkUI(null);
+        return;
+      }
+      const id = ++pingSeq;
+      state.lastPingId = id;
+      sendData({ type: 'ping', id: id, t: Date.now() });
+
+      // Sem resposta em 3,5s = rede instável
+      setTimeout(() => {
+        if (state.lastPingId === id && Date.now() - lastPongAt > 3500) {
+          setNetworkUI(null);
+          if (!networkAlertShown) {
+            networkAlertShown = true;
+            networkDownSince = Date.now();
+            showNotification('Sua conexão está instável. A chamada pode travar.');
+            playNetworkAlertSound();
+          }
+          if (Date.now() - networkDownSince > 8000) scheduleReconnect();
+        }
+      }, 3500);
+    }, 3000);
+  }
+
+  function stopNetworkMonitor() {
+    if (pingInterval) clearInterval(pingInterval);
+    pingInterval = null;
+    setNetworkUI(null);
+  }
+
+  function playNetworkAlertSound() {
+    if (!state.enableBeep) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [440, 330].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.18);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime + i * 0.18);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.16);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.18);
+        osc.stop(ctx.currentTime + i * 0.18 + 0.18);
+      });
+    } catch (e) {}
   }
 
   function sendData(dataObj) {
@@ -1265,6 +1590,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function handleIncomingData(data) {
+    // ---- PING / PONG para medir qualidade de rede ----
+    if (data.type === 'ping') {
+      sendData({ type: 'pong', id: data.id, t: data.t });
+      return;
+    }
+    if (data.type === 'pong') {
+      lastPongAt = Date.now();
+      networkAlertShown = false;
+      networkDownSince = 0;
+      setNetworkUI(Math.max(0, Math.round(Date.now() - (data.t || Date.now()))));
+      return;
+    }
+
+    // ---- "Está digitando..." ----
+    if (data.type === 'typing') {
+      showTypingIndicator(!!data.isTyping, data.userName);
+      return;
+    }
+
+    // ---- Verificação de PIN da sala ----
+    if (data.type === 'pin_check') {
+      const ok = !state.roomPin || (data.pin || '') === state.roomPin;
+      sendData({ type: 'pin_result', ok: ok });
+      if (!ok) {
+        // Encerra a conexão com quem não sabe a senha da sala
+        setTimeout(() => {
+          try { state.dataConnection?.close(); } catch(e) {}
+        }, 300);
+      }
+      return;
+    }
+
+    if (data.type === 'pin_result') {
+      if (!data.ok) {
+        showNotification('PIN incorreto. Você não pode entrar nesta sala.');
+        alert('PIN incorreto! Peça a senha correta para quem criou a sala.');
+        cleanupAndExitCall(true);
+      }
+      return;
+    }
+
     if (data.type === 'handshake') {
       if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = data.userName || 'Colega';
       if (remoteUserAvatar) remoteUserAvatar.textContent = (data.userName ? data.userName[0] : 'C').toUpperCase();
@@ -1526,6 +1892,42 @@ document.addEventListener('DOMContentLoaded', () => {
     inputChatFallback.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') sendManualChatMessage();
     });
+    // Avisa o colega "está digitando..." enquanto o texto está sendo escrito
+    inputChatFallback.addEventListener('input', () => {
+      const hasText = inputChatFallback.value.length > 0;
+      if (hasText && !state.isTypingSent) {
+        state.isTypingSent = true;
+        sendData({ type: 'typing', isTyping: true, userName: state.userName });
+      } else if (!hasText && state.isTypingSent) {
+        state.isTypingSent = false;
+        sendData({ type: 'typing', isTyping: false });
+      }
+      clearTimeout(state.typingStopTimer);
+      state.typingStopTimer = setTimeout(() => {
+        if (state.isTypingSent) {
+          state.isTypingSent = false;
+          sendData({ type: 'typing', isTyping: false });
+        }
+      }, 3000);
+    });
+  }
+
+  // ==========================================
+  // "ESTÁ DIGITANDO..."
+  // ==========================================
+  let typingHideTimer = null;
+  function showTypingIndicator(isTyping, name) {
+    const el = document.getElementById('typingIndicator');
+    const txt = document.getElementById('typingIndicatorText');
+    if (!el) return;
+    clearTimeout(typingHideTimer);
+    if (isTyping) {
+      if (txt) txt.textContent = `${name || 'Colega'} está digitando...`;
+      el.classList.remove('hidden');
+      typingHideTimer = setTimeout(() => el.classList.add('hidden'), 4000);
+    } else {
+      el.classList.add('hidden');
+    }
   }
 
   async function sendManualChatMessage() {
@@ -1548,6 +1950,9 @@ document.addEventListener('DOMContentLoaded', () => {
       translated: null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
+
+    state.isTypingSent = false;
+    sendData({ type: 'typing', isTyping: false });
   }
 
   async function handleIncomingChat(data) {
@@ -1731,9 +2136,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   on('btnCopyInvite', 'click', () => {
-    const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomId}`;
+    const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomId}${state.roomPin ? '&pin=' + encodeURIComponent(state.roomPin) : ''}`;
     navigator.clipboard.writeText(inviteUrl).then(() => {
-      showNotification('Link copiado!');
+      showNotification(state.roomPin ? 'Link com PIN copiado!' : 'Link copiado!');
     }).catch(() => {
       prompt('Copie o link:', inviteUrl);
     });
@@ -1745,14 +2150,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function cleanupAndExitCall() {
+  function cleanupAndExitCall(silent = false) {
     stopScreenShare();
     stopSecondCamera();
     stopRecording();
+    stopNetworkMonitor();
     clearInterval(state.timerInterval);
 
     const duration = callTimerDisplay ? callTimerDisplay.textContent : '00:00';
     saveCallToArchive(state.roomId, duration, state.transcriptHistory);
+    saveCallNotes(state.roomId);
 
     if (speechRecognizer) {
       try { speechRecognizer.stop(); } catch(e) {}
@@ -1764,13 +2171,82 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.dataConnection) state.dataConnection.close();
     if (state.peer) state.peer.destroy();
 
+    state.roomId = null;
+    state.isReconnecting = false;
+    state.reconnectAttempts = 0;
+    showTypingIndicator(false);
+
     if (mainHeader) mainHeader.classList.remove('hidden');
     if (callScreen) callScreen.classList.add('hidden');
     if (lobbyScreen) lobbyScreen.classList.remove('hidden');
     updateConnectionBadge('Desconectado', 'ready');
     window.history.pushState({}, '', window.location.pathname);
-    showNotification('Reunião finalizada e salva em "Reuniões"!');
+    if (!silent) showNotification('Reunião finalizada e salva em "Reuniões"!');
   }
+
+  // ==========================================
+  // BLOCO DE NOTAS DURANTE A CHAMADA
+  // ==========================================
+  const callNotesPanel = document.getElementById('callNotesPanel');
+  const callNotesText = document.getElementById('callNotesText');
+  const callNotesStatus = document.getElementById('callNotesStatus');
+
+  function notesKey(roomId) {
+    return 'lc_call_notes_' + (roomId || 'avulsa');
+  }
+
+  function loadCallNotes(roomId) {
+    if (!callNotesText) return;
+    callNotesText.value = localStorage.getItem(notesKey(roomId)) || '';
+    if (callNotesStatus) callNotesStatus.textContent = 'Salvo automaticamente';
+  }
+
+  function saveCallNotes(roomId) {
+    if (!callNotesText) return;
+    try {
+      const text = callNotesText.value;
+      if (text && text.trim()) localStorage.setItem(notesKey(roomId), text);
+      if (callNotesStatus) callNotesStatus.textContent = 'Salvo ✓';
+    } catch (e) {}
+  }
+
+  on('btnCallNotes', 'click', () => {
+    if (!callNotesPanel) return;
+    const willOpen = callNotesPanel.classList.contains('hidden');
+    callNotesPanel.classList.toggle('hidden', !willOpen);
+    document.getElementById('btnCallNotes')?.classList.toggle('text-amber-300', willOpen);
+    if (willOpen) {
+      loadCallNotes(state.roomId);
+      setTimeout(() => callNotesText?.focus(), 60);
+    }
+  });
+
+  on('btnCloseCallNotes', 'click', () => {
+    saveCallNotes(state.roomId);
+    callNotesPanel?.classList.add('hidden');
+    document.getElementById('btnCallNotes')?.classList.remove('text-amber-300');
+  });
+
+  if (callNotesText) {
+    let notesSaveTimer = null;
+    callNotesText.addEventListener('input', () => {
+      if (callNotesStatus) callNotesStatus.textContent = 'Salvando...';
+      clearTimeout(notesSaveTimer);
+      notesSaveTimer = setTimeout(() => saveCallNotes(state.roomId), 600);
+    });
+  }
+
+  on('btnDownloadCallNotes', 'click', () => {
+    const text = callNotesText ? callNotesText.value : '';
+    if (!text.trim()) {
+      showNotification('Nenhuma nota escrita ainda.');
+      return;
+    }
+    const header = `NOTAS DA REUNIAO - LINGUACALL\nSala: ${state.roomId || '-'}\nData: ${new Date().toLocaleString()}\nCriado por Kaynan Monteiro\n\n`;
+    downloadBlob(header + text, `notas-${state.roomId || 'reuniao'}.txt`, 'text/plain;charset=utf-8');
+  });
+
+  // Atalho N para abrir/fechar o bloco de notas
 
   function showNotification(msg) {
     const toast = document.createElement('div');

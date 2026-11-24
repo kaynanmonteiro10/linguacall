@@ -61,3 +61,23 @@ html, body {
 .animate-float-up {
   animation: floatUp 2.4s ease-out forwards;
 }
+
+/* ==========================================================
+   Desfoque de fundo (privacidade do ambiente) - via CSS
+   Aplicado apenas na imagem da câmera; as legendas e os
+   controles ficam na tela e continuam nítidos.
+   ========================================================== */
+.blur-background {
+  filter: blur(14px) saturate(1.05);
+  transform: scale(1.12);
+}
+
+.blur-background.-scale-x-100 {
+  transform: scale(1.12) scaleX(-1);
+}
+
+@media (max-width: 640px) {
+  .blur-background {
+    filter: blur(10px) saturate(1.05);
+  }
+}

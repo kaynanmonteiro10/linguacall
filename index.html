@@ -118,7 +118,7 @@
               <div class="flex items-center gap-2 flex-wrap">
                 <h3 class="font-bold text-sm sm:text-base text-white">Kaynan Monteiro</h3>
                 <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
-                  Idealizador & Criador
+                  Idealizador &amp; Criador
                 </span>
                 <span class="text-[10px] text-slate-400">21 anos • Brasil 🇧🇷</span>
               </div>
@@ -131,7 +131,7 @@
                   Open Source Não Comercial (Proibida venda de terceiros)
                 </span>
                 <button id="btnOpenCreatorDetails" class="text-indigo-400 hover:text-indigo-300 font-medium underline flex items-center gap-1 transition">
-                  Manifesto & Detalhes
+                  Manifesto &amp; Detalhes
                   <i data-lucide="arrow-right" class="w-3 h-3"></i>
                 </button>
               </div>
@@ -167,6 +167,15 @@
                 <option value="ja-JP">Japonês</option>
                 <option value="zh-CN">Chinês</option>
                 <option value="ru-RU">Russo</option>
+                <option value="ar-SA">Árabe</option>
+                <option value="hi-IN">Hindi (Índia)</option>
+                <option value="ko-KR">Coreano</option>
+                <option value="tr-TR">Turco</option>
+                <option value="id-ID">Indonésio</option>
+                <option value="nl-NL">Holandês</option>
+                <option value="pl-PL">Polonês</option>
+                <option value="th-TH">Tailandês</option>
+                <option value="vi-VN">Vietnamita</option>
               </select>
             </div>
             <div>
@@ -181,6 +190,15 @@
                 <option value="ja">Japonês</option>
                 <option value="zh">Chinês</option>
                 <option value="ru">Russo</option>
+                <option value="ar">Árabe</option>
+                <option value="hi">Hindi (Índia)</option>
+                <option value="ko">Coreano</option>
+                <option value="tr">Turco</option>
+                <option value="id">Indonésio</option>
+                <option value="nl">Holandês</option>
+                <option value="pl">Polonês</option>
+                <option value="th">Tailandês</option>
+                <option value="vi">Vietnamita</option>
               </select>
             </div>
           </div>
@@ -229,6 +247,19 @@
               Entrar
             </button>
           </div>
+
+          <!-- Sala com senha / PIN -->
+          <div class="p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-300 flex items-center gap-2">
+                <i data-lucide="lock" class="w-4 h-4 text-indigo-400"></i>
+                Senha da sala (opcional)
+              </span>
+              <span class="text-[10px] text-slate-500">PIN</span>
+            </div>
+            <input type="text" id="inputRoomPin" inputmode="numeric" maxlength="12" autocomplete="off" placeholder="Ex: 1234 (deixe vazio para sala aberta)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white tracking-[0.3em] focus:outline-none focus:border-indigo-500">
+            <p class="text-[10px] text-slate-500">Quem criar a sala define o PIN. Quem entrar precisa digitar o mesmo PIN.</p>
+          </div>
         </div>
 
       </div>
@@ -254,9 +285,19 @@
               <span id="callTimerDisplay">00:00</span>
             </div>
 
-            <div class="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] text-slate-400 font-mono">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span id="pingDisplay">28ms</span>
+            <!-- Status real de rede (Ping + Alerta de conexão instável) -->
+            <div id="networkStatusBadge" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] text-slate-400 font-mono" title="Qualidade da sua conexão">
+              <span id="networkDot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+              <span id="pingDisplay">--</span>
+            </div>
+
+            <button id="btnCallNotes" class="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-amber-300 transition" title="Bloco de notas da chamada">
+              <i data-lucide="notebook-pen" class="w-3.5 h-3.5"></i>
+            </button>
+
+            <!-- Selo de status da conexão -->
+            <div id="connectionStatusBadge" class="hidden px-2 py-0.5 rounded-full text-[11px] border border-slate-700 bg-slate-800 text-slate-300 items-center gap-1 flex">
+              <span id="connectionStatusText">Pronto</span>
             </div>
             
             <!-- Seletores Rápidos de Idioma -->
@@ -272,6 +313,15 @@
                 <option value="ja-JP">🇯🇵 JA</option>
                 <option value="zh-CN">🇨🇳 ZH</option>
                 <option value="ru-RU">🇷🇺 RU</option>
+                <option value="ar-SA">🇸🇦 AR</option>
+                <option value="hi-IN">🇮🇳 HI</option>
+                <option value="ko-KR">🇰🇷 KO</option>
+                <option value="tr-TR">🇹🇷 TR</option>
+                <option value="id-ID">🇮🇩 ID</option>
+                <option value="nl-NL">🇳🇱 NL</option>
+                <option value="pl-PL">🇵🇱 PL</option>
+                <option value="th-TH">🇹🇭 TH</option>
+                <option value="vi-VN">🇻🇳 VI</option>
               </select>
 
               <i data-lucide="arrow-right" class="w-3 h-3 text-slate-500"></i>
@@ -287,6 +337,15 @@
                 <option value="ja">🇯🇵 JA</option>
                 <option value="zh">🇨🇳 ZH</option>
                 <option value="ru">🇷🇺 RU</option>
+                <option value="ar">🇸🇦 AR</option>
+                <option value="hi">🇮🇳 HI</option>
+                <option value="ko">🇰🇷 KO</option>
+                <option value="tr">🇹🇷 TR</option>
+                <option value="id">🇮🇩 ID</option>
+                <option value="nl">🇳🇱 NL</option>
+                <option value="pl">🇵🇱 PL</option>
+                <option value="th">🇹🇭 TH</option>
+                <option value="vi">🇻🇳 VI</option>
               </select>
             </div>
           </div>
@@ -360,7 +419,7 @@
             <!-- CARD 1: COLEGA REMOTO -->
             <div id="remoteContainer" class="w-full h-full relative flex items-center justify-center bg-slate-950 border border-slate-800/80 rounded-2xl overflow-hidden min-h-0 shadow-xl">
               
-              <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+              <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover hidden transition-all duration-300"></video>
 
               <div id="remoteAvatarBox" class="flex flex-col items-center justify-center relative p-6">
                 <div id="remoteAudioWave" class="hidden absolute w-32 h-32 rounded-full bg-emerald-500/20 animate-ripple"></div>
@@ -395,7 +454,7 @@
             <!-- CARD 2: PARTICIPANTE LOCAL -->
             <div id="localContainer" class="w-full h-full relative flex items-center justify-center bg-slate-950 border border-slate-800/80 rounded-2xl overflow-hidden min-h-0 shadow-xl">
               
-              <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100 hidden"></video>
+              <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100 hidden transition-all duration-300"></video>
               <video id="localSecondVideo" autoplay playsinline muted class="w-full h-1/2 object-cover border-t border-indigo-500/40 hidden"></video>
 
               <div id="localAvatarBox" class="flex flex-col items-center justify-center relative p-4">
@@ -413,6 +472,9 @@
                 <button id="btnToggleDualCamera" class="p-1 rounded text-slate-300 hover:text-white transition" title="Câmera Dupla">
                   <i data-lucide="camera" class="w-3.5 h-3.5"></i>
                 </button>
+                <button id="btnToggleBgBlur" class="p-1 rounded text-slate-300 hover:text-white transition" title="Desfocar fundo">
+                  <i data-lucide="scan-eye" class="w-3.5 h-3.5"></i>
+                </button>
               </div>
 
               <div class="absolute bottom-2.5 left-2.5 z-20 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg text-xs flex items-center gap-1.5 text-white border border-slate-800">
@@ -429,6 +491,27 @@
 
           </div>
 
+        </div>
+
+        <!-- BLOCO DE NOTAS RÁPIDAS DURANTE A CHAMADA -->
+        <div id="callNotesPanel" class="hidden w-full md:w-80 flex-shrink-0 bg-slate-900 border-t md:border-t-0 md:border-l border-amber-500/30 flex flex-col min-h-0 z-30">
+          <div class="p-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 flex-shrink-0">
+            <span class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <i data-lucide="notebook-pen" class="w-3.5 h-3.5"></i>
+              Minhas notas
+            </span>
+            <button id="btnCloseCallNotes" class="text-slate-400 hover:text-white p-1">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <textarea id="callNotesText" placeholder="Anote algo rápido sem sair da chamada..." class="flex-1 w-full min-h-[140px] bg-slate-950 text-slate-100 text-xs p-3 resize-none focus:outline-none leading-relaxed"></textarea>
+          <div class="p-2 border-t border-slate-800 flex items-center justify-between gap-1.5 flex-shrink-0">
+            <span id="callNotesStatus" class="text-[10px] text-slate-500">Salvo automaticamente</span>
+            <button id="btnDownloadCallNotes" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] flex items-center gap-1 transition">
+              <i data-lucide="download" class="w-3 h-3"></i>
+              <span>.txt</span>
+            </button>
+          </div>
         </div>
 
         <!-- BARRA RÁPIDA DE REAÇÕES (EMOJIS) -->
@@ -520,6 +603,16 @@
 
         <!-- Digitação Fallback -->
         <div class="p-2.5 border-t border-slate-800 bg-slate-950/80 flex flex-col gap-1.5 flex-shrink-0">
+          <div class="h-4 text-[10px] text-emerald-400 italic flex items-center gap-1.5 px-0.5">
+            <span id="typingIndicator" class="hidden flex items-center gap-1.5">
+              <span class="flex items-end gap-0.5">
+                <span class="w-1 h-1 rounded-full bg-emerald-400 animate-bounce" style="animation-delay:0ms"></span>
+                <span class="w-1 h-1 rounded-full bg-emerald-400 animate-bounce" style="animation-delay:120ms"></span>
+                <span class="w-1 h-1 rounded-full bg-emerald-400 animate-bounce" style="animation-delay:240ms"></span>
+              </span>
+              <span id="typingIndicatorText">Colega está digitando...</span>
+            </span>
+          </div>
           <div class="flex gap-1.5">
             <input type="text" id="inputChatFallback" placeholder="Escreva uma mensagem..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
             <button id="btnSendChat" class="px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl flex items-center justify-center transition" title="Enviar no chat">
@@ -550,8 +643,16 @@
         </button>
       </div>
 
-      <div id="savedCallsList" class="flex-1 overflow-y-auto py-3 space-y-2.5 text-xs"></div>
+      <!-- BUSCA NO HISTÓRICO DE REUNIÕES ANTIGAS -->
+      <div class="pb-2">
+        <div class="relative">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input type="text" id="inputSearchCalls" placeholder="Buscar uma fala em reuniões passadas..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div id="searchCallsSummary" class="hidden pt-1.5 text-[10px] text-slate-400"></div>
+      </div>
 
+      <div id="savedCallsList" class="flex-1 overflow-y-auto py-3 space-y-2.5 text-xs"></div>
       <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
         <button id="btnClearAllSavedCalls" class="text-rose-400 hover:text-rose-300 transition">Limpar todo o arquivo</button>
         <button id="btnCloseSavedCallsModalBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition">Fechar</button>
@@ -692,6 +793,14 @@
             <input type="checkbox" id="checkAudioBeep" checked class="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500">
             <span class="text-slate-300">Som suave quando uma nova fala traduzida chegar</span>
           </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="checkBackgroundBlur" class="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500">
+            <span class="text-slate-300">Desfocar o fundo da minha câmera (privacidade do ambiente)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="checkAutoReconnect" checked class="rounded border-slate-800 text-indigo-600 focus:ring-indigo-500">
+            <span class="text-slate-300">Reconectar automaticamente se a chamada cair</span>
+          </label>
         </div>
       </div>
 
@@ -734,10 +843,10 @@
             <div class="flex items-center gap-2 flex-wrap">
               <h4 class="font-bold text-base text-white">Kaynan Monteiro</h4>
               <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
-                Idealizador & Criador
+                Idealizador &amp; Criador
               </span>
             </div>
-            <p class="text-slate-300 text-[11px] mt-0.5">21 anos • Estudante & Desenvolvedor • Brasil 🇧🇷</p>
+            <p class="text-slate-300 text-[11px] mt-0.5">21 anos • Estudante &amp; Desenvolvedor &bull; Brasil 🇧🇷</p>
             <p class="text-indigo-400 text-[10px] mt-0.5">Dedicado há quase 6 meses neste projeto</p>
           </div>
         </div>
