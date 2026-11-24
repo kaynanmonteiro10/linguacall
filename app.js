@@ -1494,14 +1494,14 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Peer error:', err);
       // Erro de ID já em uso: a sala dona do código está ocupada
       if (err && err.type === 'unavailable-id') {
-        updateConnectionBadge('Sala ocupada ou PIN incorreto', 'error');
-        showNotification('Não foi possível entrar: sala ocupada ou PIN incorreto.');
+        updateConnectionBadge('Sala cheia ou link inválido', 'error');
+        showNotification('Não foi possível entrar: sala cheia ou link inválido.');
         setTimeout(() => cleanupAndExitCall(true), 2200);
         return;
       }
       if (err && (err.type === 'peer-unavailable' || err.type === 'network')) {
         updateConnectionBadge('Colega não encontrado', 'error');
-        showNotification('Colega não encontrado. Confira o código e o PIN.');
+        showNotification('Sala não encontrada. Confira o código ou peça o link de novo.');
         return;
       }
       updateConnectionBadge('Erro na conexão', 'error');
