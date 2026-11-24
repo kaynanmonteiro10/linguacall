@@ -138,7 +138,7 @@
         <div>
           <h1 class="font-bold text-sm leading-tight text-white flex items-center gap-1.5">
             LinguaCall Pro
-            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v11</span>
+            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v12</span>
           </h1>
           <p class="text-[10px] text-neutral-400">Criado por Kaynan Monteiro</p>
         </div>
@@ -447,6 +447,30 @@
               <span id="chatNotificationBadge" class="hidden absolute top-0.5 right-0.5 w-2 h-2 bg-accent-500 rounded-full"></span>
             </button>
           </div>
+        </div>
+
+        <!-- CONVITE: visível dentro da chamada, inclusive no celular -->
+        <div class="px-3 py-2 border-b border-line bg-surface flex items-center gap-2 flex-shrink-0">
+          <i data-lucide="link" class="w-3.5 h-3.5 text-neutral-500 flex-shrink-0"></i>
+          <input id="inviteLinkInput" type="text" readonly value="Entrando na sala..."
+                 class="flex-1 min-w-0 bg-bg border border-line rounded-md px-2.5 h-8 text-[11px] text-neutral-300 font-mono focus:outline-none focus:border-accent-500"
+                 aria-label="Link da chamada">
+          <button id="btnShareInviteBig" class="flex-shrink-0 h-8 px-3 rounded-md bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] text-[11px] font-medium flex items-center gap-1.5 transition">
+            <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+            <span>Convidar</span>
+          </button>
+        </div>
+
+        <!-- AVISO: modo compatível (navegador sem reconhecimento de voz) -->
+        <div id="compatNotice" class="hidden px-3 py-2 border-b border-line bg-surface flex items-start gap-2 flex-shrink-0 text-[11px] text-neutral-400">
+          <i data-lucide="info" class="w-3.5 h-3.5 text-neutral-500 flex-shrink-0 mt-0.5"></i>
+          <span class="flex-1 leading-snug">
+            <strong class="text-neutral-200 font-medium">Modo compatível.</strong>
+            Seu navegador não transcreve voz sozinho — use o botão de microfone com ondas na barra de baixo para falar.
+          </span>
+          <button id="btnCloseCompatNotice" class="flex-shrink-0 text-neutral-500 hover:text-neutral-200 p-0.5" aria-label="Fechar aviso">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
         </div>
 
         <!-- AVISO: navegador sem reconhecimento de voz / microfone bloqueado -->
@@ -775,6 +799,8 @@
             <div id="safeMicBar" class="h-full bg-ok-500 transition-all" style="width:0%"></div>
           </div>
         </div>
+
+        <p id="safeMicHint" class="text-[11px] text-neutral-500 leading-relaxed">Segure o botão, fale e solte. Sua voz vai para o colega e o texto aparece no histórico.</p>
 
         <button id="btnSafeMicRecord" class="w-full h-11 rounded-lg bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] font-medium text-sm flex items-center justify-center gap-2 transition">
           <i data-lucide="mic" class="w-4 h-4"></i>

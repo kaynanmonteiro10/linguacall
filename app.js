@@ -1412,6 +1412,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}${state.roomPin ? '&pin=' + encodeURIComponent(state.roomPin) : ''}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
+    const inviteInput = document.getElementById('inviteLinkInput');
+    if (inviteInput) inviteInput.value = newUrl;
   }
 
   // ==========================================
@@ -1486,6 +1488,7 @@ document.addEventListener('DOMContentLoaded', () => {
       else restartSpeechRecognition(null);
       updateVoiceDiag();
       updateSpeechWarningBar();
+      updateCompatNotice();
     });
 
     state.peer.on('call', (incomingCall) => {
@@ -1901,6 +1904,19 @@ document.addEventListener('DOMContentLoaded', () => {
     el.className = 'text-[11px] font-medium ' + (colorClass || 'text-neutral-400');
   }
 
+  on('btnCloseCompatNotice', 'click', () => {
+    document.getElementById('compatNotice')?.classList.add('hidden');
+  });
+
+  function updateCompatNotice() {
+    const el = document.getElementById('compatNotice');
+    if (!el) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // No iPhone/Safari não existe reconhecimento: avisa uma vez, de forma tranquila
+    if (!SpeechRecognition) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  }
+
   function updateSpeechWarningBar() {
     const bar = document.getElementById('speechWarningBar');
     const text = document.getElementById('speechWarningText');
@@ -2281,9 +2297,18 @@ document.addEventListener('DOMContentLoaded', () => {
       addLiveCaption(state.userName, result.text, translated, true);
       safeMicSetStatus('Enviado', 'text-ok-400');
     } catch (err) {
-      safeMicSetStatus('Não deu certo', 'text-danger-400');
-      safeMicShowOriginal('Não consegui transcrever esta fala.');
-      document.getElementById('btnSafeMicRetry')?.classList.remove('hidden');
+      // Sem transcrição possível: a voz JÁ foi enviada, o texto é digitado no chat
+      sendAudioToPeer(blob);
+      safeMicSetStatus('Voz enviada', 'text-ok-400');
+      safeMicShowOriginal('Voz enviada ao colega. Para traduzir, digite o texto no chat.');
+      safeMicShowTranslated('—');
+      addTranscriptItem({
+        sender: state.userName + ' (voz)',
+        isSelf: true,
+        original: 'Mensagem de voz enviada.',
+        translated: null,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
     } finally {
       safeMic.busy = false;
     }
@@ -2322,6 +2347,33 @@ document.addEventListener('DOMContentLoaded', () => {
   // Transcrição: usa o Gemini quando há chave (aceita áudio direto).
   // Sem chave, avisa com clareza em vez de falhar em silêncio.
   async function transcribeAudio(blob) {
+    // Sem chave nenhuma: o próprio navegador transcreve (Chrome/Android tem isso de graça)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const text = await new Promise((resolve) => {
+        let said = '';
+        let done = false;
+        let rec;
+        try {
+          rec = new SpeechRecognition();
+        } catch (e) { resolve(''); return; }
+        rec.lang = state.speakLang;
+        rec.continuous = true;
+        rec.interimResults = false;
+        rec.onresult = (ev) => {
+          for (let i = ev.resultIndex; i < ev.results.length; i++) {
+            if (ev.results[i].isFinal) said += ' ' + ev.results[i][0].transcript;
+          }
+        };
+        rec.onerror = () => { if (!done) { done = true; resolve(said.trim()); } };
+        rec.onend = () => { if (!done) { done = true; resolve(said.trim()); } };
+        // o áudio já está gravado; aqui só precisamos do texto da fala que acabou de acontecer
+        try { rec.start(); } catch (e) { done = true; resolve(''); return; }
+        setTimeout(() => { try { rec.stop(); } catch (e) {} }, 9000);
+      });
+      if (text) return { text, lang: state.speakLang.split('-')[0] };
+      throw new Error('sem texto');
+    }
     if (state.engine === 'gemini' && state.geminiKey) {
       const base64 = await new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -2351,9 +2403,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function openSafeMic() {
     document.getElementById('safeMicModal')?.classList.remove('hidden');
     unlockAudioPlayback();
-    safeMicSetStatus('Pronto', 'text-neutral-400');
-    if (!(state.engine === 'gemini' && state.geminiKey)) {
-      safeMicSetStatus('Precisa da chave Gemini', 'text-accent-400');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      safeMicSetStatus('Pronto', 'text-neutral-400');
+    } else {
+      // iPhone/Safari: sem transcrição local. O caminho é a voz + o texto digitado.
+      safeMicSetStatus('Voz direta (sem texto)', 'text-accent-400');
+      const hint = document.getElementById('safeMicHint');
+      if (hint) hint.textContent = 'Seu navegador não transcreve voz. Segure e fale: sua voz vai para o colega, e o texto você digita no chat para traduzir.';
     }
     const btn = document.getElementById('btnSafeMicRecord');
     if (btn) {
@@ -3089,14 +3146,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  on('btnCopyInvite', 'click', () => {
-    const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomId}${state.roomPin ? '&pin=' + encodeURIComponent(state.roomPin) : ''}`;
-    navigator.clipboard.writeText(inviteUrl).then(() => {
-      showNotification(state.roomPin ? 'Link com PIN copiado!' : 'Link copiado!');
-    }).catch(() => {
+  function buildInviteUrl() {
+    return `${window.location.origin}${window.location.pathname}?room=${state.roomId}${state.roomPin ? '&pin=' + encodeURIComponent(state.roomPin) : ''}`;
+  }
+
+  function shareInvite() {
+    const inviteUrl = buildInviteUrl();
+    const text = `Entre na minha chamada no LinguaCall: ${inviteUrl}${state.roomPin ? ' (PIN: ' + state.roomPin + ')' : ''}`;
+    // 1) Compartilhar nativo (celular): abre WhatsApp, Telegram etc.
+    if (navigator.share) {
+      navigator.share({ title: 'LinguaCall', text: text, url: inviteUrl })
+        .catch(() => { copyInvite(inviteUrl); });
+      return;
+    }
+    copyInvite(inviteUrl);
+  }
+
+  function copyInvite(inviteUrl) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(inviteUrl).then(() => {
+        showNotification(state.roomPin ? 'Link com PIN copiado!' : 'Link copiado!');
+      }).catch(() => { prompt('Copie o link:', inviteUrl); });
+    } else {
       prompt('Copie o link:', inviteUrl);
-    });
-  });
+    }
+  }
+
+  on('btnCopyInvite', 'click', shareInvite);
+  on('btnShareInviteBig', 'click', shareInvite);
 
   on('btnEndCall', 'click', () => {
     if (confirm('Deseja encerrar a ligação? O histórico será arquivado.')) {
