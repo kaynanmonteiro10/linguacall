@@ -138,7 +138,7 @@
         <div>
           <h1 class="font-bold text-sm leading-tight text-white flex items-center gap-1.5">
             LinguaCall Pro
-            <span class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300">PWA</span>
+            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v11</span>
           </h1>
           <p class="text-[10px] text-neutral-400">Criado por Kaynan Monteiro</p>
         </div>
@@ -576,6 +576,10 @@
               <i data-lucide="mic" id="iconMic" class="w-5 h-5"></i>
             </button>
 
+            <button id="btnSafeMic" class="w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-100 flex items-center justify-center transition active:scale-95" title="Falar pelo modo seguro (se a escuta não funcionar)" aria-label="Modo seguro de fala">
+              <i data-lucide="mic-vocal" class="w-5 h-5"></i>
+            </button>
+
             <button id="btnToggleCamera" class="w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-100 flex items-center justify-center transition active:scale-95" title="Câmera (V)" aria-label="Câmera">
               <i data-lucide="video" id="iconCamera" class="w-5 h-5"></i>
             </button>
@@ -740,6 +744,59 @@
           <span>Baixar TXT</span>
         </button>
         <button id="btnCloseSpecificCallModalBtn" class="px-4 h-8 bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] rounded-md transition text-xs">Voltar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MODO SEGURO DE ESCUTA (não depende do reconhecimento do navegador) -->
+  <div id="safeMicModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+    <div class="bg-surface border border-line rounded-lg max-w-md w-full max-h-[88vh] flex flex-col p-5">
+      <div class="flex items-center justify-between pb-3 border-b border-line">
+        <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
+          <i data-lucide="mic" class="w-4 h-4 text-neutral-500"></i>
+          Falar pelo modo seguro
+        </h3>
+        <button id="btnCloseSafeMic" class="text-neutral-500 hover:text-neutral-100 transition p-1" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto py-3 space-y-3 text-xs">
+        <p class="text-neutral-400 leading-relaxed">
+          Este modo <strong class="text-neutral-200">não usa o reconhecimento de voz do navegador</strong> (que é o que falha em alguns Androids). Ele grava a sua voz, traduz e toca a tradução para o colega.
+        </p>
+
+        <div class="p-3 bg-bg rounded-lg border border-line">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-neutral-300">Microfone</span>
+            <span id="safeMicStatus" class="text-[11px] font-medium text-neutral-400">Pronto</span>
+          </div>
+          <div class="mt-2 h-1.5 w-full bg-raised rounded-full overflow-hidden">
+            <div id="safeMicBar" class="h-full bg-ok-500 transition-all" style="width:0%"></div>
+          </div>
+        </div>
+
+        <button id="btnSafeMicRecord" class="w-full h-11 rounded-lg bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] font-medium text-sm flex items-center justify-center gap-2 transition">
+          <i data-lucide="mic" class="w-4 h-4"></i>
+          <span id="btnSafeMicRecordLabel">Segurar para falar</span>
+        </button>
+
+        <div class="p-3 bg-bg rounded-lg border border-line space-y-1">
+          <div class="text-[11px] text-neutral-500">Minha fala</div>
+          <div id="safeMicOriginal" class="text-neutral-200 leading-snug">—</div>
+          <div class="text-[11px] text-neutral-500 pt-1.5">Tradução enviada ao colega</div>
+          <div id="safeMicTranslated" class="text-neutral-200 leading-snug">—</div>
+        </div>
+
+        <button id="btnSafeMicRetry" class="hidden w-full h-9 rounded-lg bg-raised hover:bg-line text-neutral-200 text-xs transition">Tentar de novo</button>
+
+        <p class="text-[11px] text-neutral-500 leading-relaxed">
+          No computador também funciona com a barra de espaço. A voz vai para o colega já traduzida, e o texto aparece no histórico.
+        </p>
+      </div>
+
+      <div class="pt-3 border-t border-line flex justify-end">
+        <button id="btnCloseSafeMicBtn" class="px-5 h-9 bg-raised hover:bg-line text-neutral-200 rounded-lg transition text-xs">Fechar</button>
       </div>
     </div>
   </div>

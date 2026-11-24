@@ -23,8 +23,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnInstallPwa = document.getElementById('btnInstallPwa');
 
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./sw.js').then(() => {
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
       console.log('PWA Service Worker registrado com sucesso!');
+      // Busca um service worker novo a cada abertura e recarrega uma vez
+      // quando ele assume — é assim que a correção chega sem "limpar cache".
+      reg.update().catch(() => {});
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            showNotification('Atualização baixada. Recarregando…');
+            setTimeout(() => window.location.reload(), 600);
+          }
+        });
+      });
     }).catch(err => console.warn('Service Worker erro:', err));
   }
 
@@ -1831,6 +1844,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       showRemoteCaption(data.sender, data.text, data.translated);
       playSoftBeep();
+    } else if (data.type === 'voice_clip') {
+      playIncomingVoiceClip(data);
     } else if (data.type === 'speech') {
       handleRemoteSpeech(data);
     } else if (data.type === 'chat') {
@@ -2122,6 +2137,258 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(updateVoiceDiag, 400);
     showNotification('Teste rodando: fale algo agora.');
   });
+
+  // ==========================================
+  // MODO SEGURO DE FALA (não usa reconhecimento de voz)
+  // ==========================================
+  // Grava a voz, manda o áudio para o colega e traduz por um serviço
+  // que devolve TEXTO (a tradução é lida pelo próprio app).
+  const safeMic = {
+    recorder: null,
+    chunks: [],
+    recording: false,
+    busy: false,
+    startedAt: 0,
+    meterTimer: null,
+    audioCtx: null,
+    stream: null
+  };
+
+  function safeMicSetStatus(text, color) {
+    const el = document.getElementById('safeMicStatus');
+    if (el) { el.textContent = text; el.className = 'text-[11px] font-medium ' + (color || 'text-neutral-400'); }
+  }
+
+  function safeMicShowOriginal(text) {
+    const el = document.getElementById('safeMicOriginal');
+    if (el) el.textContent = text || '—';
+  }
+  function safeMicShowTranslated(text) {
+    const el = document.getElementById('safeMicTranslated');
+    if (el) el.textContent = text || '—';
+  }
+
+  async function ensureSafeMicStream() {
+    if (state.localStream && state.localStream.getAudioTracks().some(t => t.readyState === 'live')) {
+      return state.localStream;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    safeMic.stream = stream;
+    return stream;
+  }
+
+  function startSafeMicMeter(stream) {
+    stopSafeMicMeter();
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      safeMic.audioCtx = new Ctx();
+      const analyser = safeMic.audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      safeMic.audioCtx.createMediaStreamSource(stream).connect(analyser);
+      const arr = new Uint8Array(analyser.frequencyBinCount);
+      safeMic.meterTimer = setInterval(() => {
+        analyser.getByteFrequencyData(arr);
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) sum += arr[i];
+        const level = sum / arr.length;
+        const bar = document.getElementById('safeMicBar');
+        if (bar) bar.style.width = Math.min(100, Math.round(level * 1.6)) + '%';
+      }, 120);
+    } catch (e) {}
+  }
+
+  function stopSafeMicMeter() {
+    if (safeMic.meterTimer) { clearInterval(safeMic.meterTimer); safeMic.meterTimer = null; }
+    if (safeMic.audioCtx) { safeMic.audioCtx.close().catch(() => {}); safeMic.audioCtx = null; }
+    const bar = document.getElementById('safeMicBar');
+    if (bar) bar.style.width = '0%';
+  }
+
+  async function startSafeMicRecording() {
+    if (safeMic.recording || safeMic.busy) return;
+    unlockAudioPlayback();
+    try {
+      const stream = await ensureSafeMicStream();
+      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', ''].find(t => {
+        try { return !t || MediaRecorder.isTypeSupported(t); } catch (e) { return false; }
+      });
+      safeMic.chunks = [];
+      safeMic.recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      safeMic.recorder.ondataavailable = (e) => { if (e.data && e.data.size) safeMic.chunks.push(e.data); };
+      safeMic.recorder.onstop = () => finishSafeMicRecording();
+      safeMic.recorder.start();
+      safeMic.recording = true;
+      safeMic.startedAt = Date.now();
+      safeMicSetStatus('Gravando…', 'text-ok-400');
+      const label = document.getElementById('btnSafeMicRecordLabel');
+      if (label) label.textContent = 'Parar e traduzir';
+      startSafeMicMeter(stream);
+    } catch (err) {
+      safeMicSetStatus('Microfone indisponível', 'text-danger-400');
+      showNotification('Não consegui usar o microfone. Libere a permissão e tente de novo.');
+    }
+  }
+
+  function stopSafeMicRecording() {
+    if (!safeMic.recording) return;
+    safeMic.recording = false;
+    stopSafeMicMeter();
+    try { safeMic.recorder.stop(); } catch (e) {}
+    const label = document.getElementById('btnSafeMicRecordLabel');
+    if (label) label.textContent = 'Segurar para falar';
+  }
+
+  async function finishSafeMicRecording() {
+    const seconds = (Date.now() - safeMic.startedAt) / 1000;
+    if (seconds < 0.6 || !safeMic.chunks.length) {
+      safeMicSetStatus('Muito curto', 'text-accent-400');
+      return;
+    }
+    safeMic.busy = true;
+    safeMicSetStatus('Transcrevendo…', 'text-neutral-400');
+    document.getElementById('btnSafeMicRetry')?.classList.add('hidden');
+
+    const blob = new Blob(safeMic.chunks, { type: safeMic.chunks[0].type || 'audio/webm' });
+    try {
+      const result = await transcribeAudio(blob);
+      if (!result || !result.text) throw new Error('sem texto');
+      safeMicShowOriginal(result.text);
+      const sourceLang = result.lang || state.speakLang.split('-')[0];
+      let translated = result.text;
+      if (sourceLang !== state.targetLang) {
+        translated = await translateText(result.text, sourceLang, state.targetLang);
+      }
+      safeMicShowTranslated(translated);
+
+      // 1) áudio original vai para o colega (ele ouve a sua voz)
+      sendAudioToPeer(blob);
+      // 2) tradução escrita entra no histórico e na legenda
+      sendData({
+        type: 'speech',
+        sender: state.userName,
+        text: result.text,
+        translated: translated,
+        lang: sourceLang,
+        timestamp: Date.now()
+      });
+      addTranscriptItem({
+        sender: state.userName,
+        isSelf: true,
+        original: result.text,
+        translated: translated,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+      addLiveCaption(state.userName, result.text, translated, true);
+      safeMicSetStatus('Enviado', 'text-ok-400');
+    } catch (err) {
+      safeMicSetStatus('Não deu certo', 'text-danger-400');
+      safeMicShowOriginal('Não consegui transcrever esta fala.');
+      document.getElementById('btnSafeMicRetry')?.classList.remove('hidden');
+    } finally {
+      safeMic.busy = false;
+    }
+  }
+
+  // Envia o áudio gravado para o colega tocar (funciona em qualquer navegador)
+  function sendAudioToPeer(blob) {
+    if (!state.dataConnection || !state.dataConnection.open) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = String(reader.result || '').split(',')[1] || '';
+      if (!base64) return;
+      sendData({ type: 'voice_clip', sender: state.userName, mime: blob.type || 'audio/webm', data: base64 });
+    };
+    reader.readAsDataURL(blob);
+  }
+
+  function playIncomingVoiceClip(data) {
+    try {
+      const bytes = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: data.mime || 'audio/webm' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.autoplay = true;
+      audio.playsInline = true;
+      audio.volume = 1;
+      audio.play().catch(() => {
+        diag.playBlocked = true;
+        updateVoiceDiag();
+        showNotificationOnce('play-blocked', 'Toque na tela uma vez para liberar o som do colega.');
+      });
+      audio.onended = () => URL.revokeObjectURL(url);
+    } catch (e) {}
+  }
+
+  // Transcrição: usa o Gemini quando há chave (aceita áudio direto).
+  // Sem chave, avisa com clareza em vez de falhar em silêncio.
+  async function transcribeAudio(blob) {
+    if (state.engine === 'gemini' && state.geminiKey) {
+      const base64 = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onloadend = () => resolve(String(r.result || '').split(',')[1] || '');
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.geminiKey}`;
+      const body = {
+        contents: [{
+          parts: [
+            { text: `Transcreva este áudio no idioma original e responda só com o texto transcrito. Se estiver em outro idioma, transcreva mesmo assim.` },
+            { inline_data: { mime_type: blob.type || 'audio/webm', data: base64 } }
+          ]
+        }]
+      };
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error('gemini ' + res.status);
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!text) throw new Error('vazio');
+      return { text, lang: state.speakLang.split('-')[0] };
+    }
+    throw new Error('sem chave de transcrição');
+  }
+
+  function openSafeMic() {
+    document.getElementById('safeMicModal')?.classList.remove('hidden');
+    unlockAudioPlayback();
+    safeMicSetStatus('Pronto', 'text-neutral-400');
+    if (!(state.engine === 'gemini' && state.geminiKey)) {
+      safeMicSetStatus('Precisa da chave Gemini', 'text-accent-400');
+    }
+    const btn = document.getElementById('btnSafeMicRecord');
+    if (btn) {
+      const isTouch = ('ontouchstart' in window);
+      const label = document.getElementById('btnSafeMicRecordLabel');
+      if (label) label.textContent = isTouch ? 'Segurar para falar' : 'Clique para falar';
+    }
+  }
+  function closeSafeMic() {
+    stopSafeMicRecording();
+    document.getElementById('safeMicModal')?.classList.add('hidden');
+  }
+
+  on('btnSafeMic', 'click', openSafeMic);
+  on('btnCloseSafeMic', 'click', closeSafeMic);
+  on('btnCloseSafeMicBtn', 'click', closeSafeMic);
+  on('btnSafeMicRetry', 'click', () => { startSafeMicRecording(); });
+
+  // Segurar para falar (celular) e clique para começar/parar (computador)
+  (function bindSafeMicButton() {
+    const btn = document.getElementById('btnSafeMicRecord');
+    if (!btn) return;
+    const isTouch = ('ontouchstart' in window);
+    if (isTouch) {
+      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); startSafeMicRecording(); });
+      btn.addEventListener('pointerup', (e) => { e.preventDefault(); stopSafeMicRecording(); });
+      btn.addEventListener('pointercancel', () => stopSafeMicRecording());
+      btn.addEventListener('pointerleave', () => { if (safeMic.recording) stopSafeMicRecording(); });
+    } else {
+      btn.addEventListener('click', () => {
+        if (safeMic.recording) stopSafeMicRecording();
+        else startSafeMicRecording();
+      });
+    }
+  })();
 
   // ==========================================
   // DESBLOQUEIO DE ÁUDIO (autoplay do celular)
@@ -2477,7 +2744,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     showRemoteCaption(data.sender || 'Colega', data.text, 'Traduzindo...');
 
-    const translated = await translateText(data.text, data.lang, state.targetLang);
+    const translated = data.translated || await translateText(data.text, data.lang, state.targetLang);
     diag.lastTranslateOk = !!translated;
     diag.lastTranslateFrom = data.lang || '?';
     diag.lastTranslateTo = state.targetLang;

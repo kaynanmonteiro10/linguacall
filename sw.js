@@ -3,7 +3,7 @@
  * Desenvolvido por Kaynan Monteiro
  */
 
-const CACHE_NAME = 'linguacall-cache-v9';
+const CACHE_NAME = 'linguacall-cache-v11';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -46,14 +46,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Rede primeiro: quem publica uma correção quer que ela chegue na hora.
+  // O cache fica só como reserva para quando estiver sem internet.
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
+    fetch(event.request).then((networkResponse) => {
+      if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+        const copy = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
       }
-      return fetch(event.request).then((networkResponse) => {
-        return networkResponse;
-      }).catch(() => {
+      return networkResponse;
+    }).catch(() => {
+      return caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
         return caches.match('./index.html');
       });
     })
