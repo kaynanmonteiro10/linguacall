@@ -248,11 +248,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // ALTERNADOR DE TEMAS VISUAIS
   // ==========================================
-  // Três temas neutros: mesmo desenho, temperatura de cor diferente (sem gradientes)
   const themes = [
-    { name: 'Escuro',  vars: { '--bg': '#0d0d0f', '--surface': '#16161a', '--raised': '#1d1d22', '--line': '#2b2b31', '--fg': '#f4f4f6', '--muted': '#9a9aa3' } },
-    { name: 'Grafite', vars: { '--bg': '#141518', '--surface': '#1c1d21', '--raised': '#24252a', '--line': '#33343a', '--fg': '#eceef1', '--muted': '#a2a4ab' } },
-    { name: 'Claro',   vars: { '--bg': '#f6f6f3', '--surface': '#ffffff', '--raised': '#eeeeea', '--line': '#e2e2dd', '--fg': '#17171a', '--muted': '#6b6b73' } }
+    { name: 'Escuro', vars: { '--bg': '#0a0f14', '--surface': '#101820', '--raised': '#16222d', '--line': '#24323f', '--fg': '#f5f7fa', '--muted': '#94a3b8', '--accent': '#14b8a6', '--accent-strong': '#2dd4bf', '--accent-soft': '#5eead4', '--accent-ink': '#03211d' } },
+    { name: 'Grafite', vars: { '--bg': '#11161b', '--surface': '#182029', '--raised': '#202b36', '--line': '#2e3b48', '--fg': '#eef2f6', '--muted': '#a0adba', '--accent': '#14b8a6', '--accent-strong': '#2dd4bf', '--accent-soft': '#5eead4', '--accent-ink': '#03211d' } },
+    { name: 'Claro', vars: { '--bg': '#f4f7f8', '--surface': '#ffffff', '--raised': '#edf2f4', '--line': '#dbe4e8', '--fg': '#102027', '--muted': '#60717c', '--accent': '#0d9488', '--accent-strong': '#0f766e', '--accent-soft': '#0f766e', '--accent-ink': '#ecfdf5' } }
   ];
   function applyTheme(idx) {
     const t = themes[idx];
@@ -1254,6 +1253,24 @@ document.addEventListener('DOMContentLoaded', () => {
     state.targetLang = e.target.value;
     if (inCallTargetLang) inCallTargetLang.value = state.targetLang;
     localStorage.setItem('lc_target_lang', state.targetLang);
+  });
+
+  on('btnSwapLanguages', 'click', () => {
+    if (!selectSpeakLang || !selectTargetLang) return;
+    const locales = {
+      pt: 'pt-BR', en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE',
+      it: 'it-IT', ja: 'ja-JP', zh: 'zh-CN', ru: 'ru-RU', ar: 'ar-SA',
+      hi: 'hi-IN', ko: 'ko-KR', tr: 'tr-TR', id: 'id-ID', nl: 'nl-NL',
+      pl: 'pl-PL', th: 'th-TH', vi: 'vi-VN'
+    };
+    const nextSpeak = locales[selectTargetLang.value];
+    const nextTarget = selectSpeakLang.value.split('-')[0];
+    if (!nextSpeak) return;
+    selectSpeakLang.value = nextSpeak;
+    selectTargetLang.value = nextTarget;
+    selectSpeakLang.dispatchEvent(new Event('change'));
+    selectTargetLang.dispatchEvent(new Event('change'));
+    showNotification('Idiomas trocados.');
   });
 
   function generateRoomId() {
@@ -3515,7 +3532,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showNotification(msg) {
     const toast = document.createElement('div');
-    toast.className = 'fixed top-14 left-1/2 -translate-x-1/2 bg-accent-600 text-white px-3.5 py-2 rounded-lg shadow-2xl text-xs z-50 flex items-center gap-1.5 border border-accent-400/50 animate-bounce';
+    toast.className = 'app-toast';
     toast.innerHTML = `<span>${escapeHtml(msg)}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2500);

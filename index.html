@@ -11,7 +11,7 @@
 
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#0a0f14">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="LinguaCall">
@@ -25,70 +25,49 @@
     tailwind.config = {
       darkMode: 'class',
       theme: {
-        extend: {
-          animation: {
-            'ripple': 'ripple 1.5s linear infinite',
-            'fade-up': 'fadeUp 0.25s ease-out forwards',
-            'float-up': 'floatUp 2.4s ease-out forwards',
-          },
-          keyframes: {
-            ripple: {
-              '0%': { transform: 'scale(0.95)', opacity: '1' },
-              '100%': { transform: 'scale(1.4)', opacity: '0' },
-            },
-            fadeUp: {
-              '0%': { opacity: '0', transform: 'translateY(10px)' },
-              '100%': { opacity: '1', transform: 'translateY(0)' },
-            },
-            floatUp: {
-              '0%': { opacity: '1', transform: 'translateY(0) scale(0.8)' },
-              '50%': { opacity: '0.9', transform: 'translateY(-70px) scale(1.3)' },
-              '100%': { opacity: '0', transform: 'translateY(-150px) scale(1.6)' },
-            }
-          }
-        }
-      }
-    }
-  </script>
-
-  <!-- Sistema visual: tokens de cor (sem gradientes, sem vidro fosco) -->
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
         screens: { xs: '420px', sm: '640px', md: '768px', lg: '1024px', xl: '1280px', '2xl': '1536px' },
         extend: {
           colors: {
-            bg: '#0d0d0f',
-            surface: '#16161a',
-            raised: '#1d1d22',
-            line: '#2b2b31',
-            fg: '#f4f4f6',
-            muted: '#9a9aa3',
+            bg: '#0a0f14',
+            surface: '#101820',
+            raised: '#16222d',
+            line: '#24323f',
+            fg: '#f5f7fa',
+            muted: '#94a3b8',
             accent: {
-              DEFAULT: '#e0b64b',
-              200: '#f7e9c4',
-              300: '#f3d283',
-              400: '#eec459',
-              500: '#e0b64b',
-              600: '#c9a03c',
-              700: '#a8842f',
-              800: '#6b5420',
-              900: '#3b2f14',
-              950: '#221c0d',
-              soft: '#f3d283',
-              ink: '#0d0d0f',
+              DEFAULT: '#14b8a6',
+              100: '#ccfbf1',
+              200: '#99f6e4',
+              300: '#5eead4',
+              400: '#2dd4bf',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+              800: '#115e59',
+              900: '#134e4a',
+              950: '#042f2e',
+              soft: '#5eead4',
+              ink: '#03211d',
             },
             neutral: {
-              100: '#f4f4f6', 200: '#e2e2e7', 300: '#c4c4cc', 400: '#9a9aa3',
-              500: '#6f6f78', 600: '#54545c', 700: '#3a3a41', 800: '#26262b',
-              900: '#16161a', 950: '#0d0d0f',
+              100: '#f5f7fa', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8',
+              500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b',
+              900: '#101820', 950: '#0a0f14',
             },
             ok: {
-              200: '#c6e9d7', 300: '#a2dcbc', 400: '#79c79c',
-              500: '#57b184', 600: '#3f8f68', 900: '#1a2b22', 950: '#12201a',
+              200: '#bbf7d0', 300: '#86efac', 400: '#4ade80',
+              500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534',
+              900: '#14532d', 950: '#052e16',
             },
-            danger: { 300: '#f0b5b1', 400: '#e07b76', 500: '#d2554f', 600: '#c1443f', 950: '#2a1514' },
+            danger: { 300: '#fda4af', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 950: '#4c0519' },
+          },
+          fontFamily: {
+            sans: ['Manrope', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+            display: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            soft: '0 24px 70px -36px rgba(0, 0, 0, 0.85)',
+            glow: '0 16px 36px -18px rgba(20, 184, 166, 0.55)',
           },
           animation: {
             'ripple': 'ripple 1.5s linear infinite',
@@ -114,10 +93,9 @@
       }
     }
   </script>
-  <!-- Tipografia: Inter para a interface, Söhne-like via system-ui -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body id="appBody" class="bg-bg text-fg h-full w-full flex flex-col font-sans antialiased overflow-hidden select-none">
@@ -129,193 +107,263 @@
   </div>
 
   <!-- Cabeçalho Principal (Lobby) -->
-  <header id="mainHeader" class="border-b border-line bg-surface h-14 flex-shrink-0 z-40">
-    <div class="w-full max-w-7xl mx-auto px-3 sm:px-4 h-full flex items-center justify-between gap-2 min-w-0">
-      <div class="flex items-center gap-2.5 min-w-0">
-        <div class="w-8 h-8 rounded-lg bg-accent flex-shrink-0 flex items-center justify-center">
-          <i data-lucide="languages" class="w-4 h-4 text-[#0d0d0f]"></i>
+  <header id="mainHeader" class="h-[72px] flex-shrink-0 border-b border-line/80 bg-surface/80 z-40">
+    <div class="mx-auto flex h-full w-full max-w-[1180px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+      <div class="flex min-w-0 items-center gap-3">
+        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-accent-500 text-accent-ink shadow-glow">
+          <i data-lucide="languages" class="h-5 w-5"></i>
         </div>
-        <div>
-          <h1 class="font-bold text-sm leading-tight text-white flex items-center gap-1.5">
-            LinguaCall Pro
-            <span id="appVersionBadge" class="text-[9px] font-normal px-1 rounded bg-accent-900/70 text-accent-300" title="Versão do app">v18</span>
-          </h1>
-          <p class="text-[10px] text-neutral-400">Criado por Kaynan Monteiro</p>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h1 class="truncate text-[17px] font-extrabold tracking-[-0.04em] text-white">LinguaCall</h1>
+            <span id="appVersionBadge" class="rounded-full border border-accent-500/20 bg-accent-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-accent-300" title="Versão do app">v19</span>
+          </div>
+          <p class="truncate text-[10px] font-medium text-neutral-400">Conversas sem fronteiras</p>
         </div>
       </div>
 
-      <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-        <button id="btnOpenAboutCreator" class="px-2.5 py-1 rounded-lg border border-accent-500/40 bg-accent-950/60 hover:bg-accent-900/80 text-xs text-accent-300 flex items-center gap-1.5 transition" title="Sobre o Criador Kaynan Monteiro">
-          <i data-lucide="heart" class="w-3.5 h-3.5 text-danger-400"></i>
+      <nav class="flex flex-shrink-0 items-center gap-1 sm:gap-2" aria-label="Menu principal">
+        <button id="btnOpenAboutCreator" class="flex h-10 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-neutral-400 transition hover:bg-raised hover:text-neutral-100 sm:px-3" title="Sobre o criador Kaynan Monteiro">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full border border-line bg-raised text-[9px] font-bold text-accent-300">KM</span>
           <span class="hidden sm:inline">Criador</span>
         </button>
 
-        <button id="btnInstallPwa" class="hidden px-2.5 py-1 rounded-lg bg-accent-600/20 hover:bg-accent-600/30 border border-accent-500/30 text-accent-300 text-xs flex items-center gap-1.5 transition">
-          <i data-lucide="download" class="w-3.5 h-3.5"></i>
-          <span>Instalar App</span>
+        <button id="btnInstallPwa" class="hidden h-10 items-center gap-2 rounded-xl border border-accent-500/20 bg-accent-500/10 px-3 text-xs font-semibold text-accent-300 transition hover:bg-accent-500/15">
+          <i data-lucide="download" class="h-4 w-4"></i>
+          <span>Instalar</span>
         </button>
 
-        <button id="btnOpenSavedCallsModal" class="h-8 px-2.5 rounded-lg text-xs text-neutral-400 hover:text-neutral-100 hover:bg-raised flex items-center gap-1.5 transition" title="Reuniões gravadas">
-          <i data-lucide="archive" class="w-4 h-4"></i>
+        <button id="btnOpenSavedCallsModal" class="flex h-10 items-center gap-2 rounded-xl px-2 text-xs font-semibold text-neutral-400 transition hover:bg-raised hover:text-neutral-100 sm:px-3" title="Reuniões gravadas">
+          <i data-lucide="archive" class="h-4 w-4"></i>
           <span class="hidden sm:inline">Reuniões</span>
         </button>
 
-        <button id="btnSettings" class="w-8 h-8 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-raised flex items-center justify-center transition" title="Configurações">
-          <i data-lucide="settings" class="w-4 h-4"></i>
+        <button id="btnSettings" class="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-400 transition hover:bg-raised hover:text-neutral-100" title="Configurações" aria-label="Configurações">
+          <i data-lucide="settings" class="h-[18px] w-[18px]"></i>
         </button>
-      </div>
+      </nav>
     </div>
   </header>
 
   <!-- Área Principal -->
   <main class="flex-1 w-full relative overflow-hidden flex flex-col items-center justify-center min-h-0" style="min-height:0">
     
-    <!-- TELA 1: LOBBY COM CRÉDITOS VISÍVEIS DE CARA -->
-    <div id="lobbyScreen" class="w-full max-w-[440px] px-4 sm:px-0 py-8 mx-auto overflow-y-auto overflow-x-hidden max-h-full">
-      <div class="space-y-5">
-        
-        <!-- CARD OFICIAL DE APRESENTAÇÃO E CRÉDITOS PARA KAYNAN MONTEIRO (VISÍVEL NO APP) -->
-        <div class="bg-surface border border-line rounded-lg p-5 sm:p-6">
-          <div class="flex items-start gap-3.5">
-            <div class="w-11 h-11 rounded-lg bg-raised flex items-center justify-center text-neutral-300 font-semibold text-sm flex-shrink-0">
-              KM
+    <!-- TELA 1: LOBBY -->
+    <div id="lobbyScreen" class="lobby-shell relative h-full w-full overflow-y-auto overflow-x-hidden">
+      <div class="relative z-10 mx-auto flex min-h-full w-full max-w-[1180px] flex-col justify-center px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+        <div class="grid items-center gap-9 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
+          <section class="hero-copy">
+            <div class="inline-flex items-center gap-2 rounded-full border border-accent-500/20 bg-accent-500/10 px-3 py-1.5 text-[11px] font-bold text-accent-300">
+              <span class="h-1.5 w-1.5 rounded-full bg-accent-400 shadow-[0_0_12px_rgba(45,212,191,0.8)]"></span>
+              Chamadas 1 a 1, em tempo real
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="font-bold text-sm sm:text-base text-white">Kaynan Monteiro</h3>
-                <span class="text-[10px] px-1.5 py-0.5 rounded bg-raised text-neutral-400 font-medium">
-                  Idealizador &amp; Criador
-                </span>
-                <span class="text-[10px] text-neutral-400">21 anos • Brasil 🇧🇷</span>
+
+            <h2 class="mt-6 max-w-[650px] font-display text-[38px] font-extrabold leading-[1.06] tracking-[-0.055em] text-white sm:text-[52px] lg:text-[60px]">
+              Fale do seu jeito.<br>
+              <span class="text-accent-300">Entenda o mundo.</span>
+            </h2>
+
+            <p class="mt-5 max-w-[520px] text-[15px] leading-7 text-neutral-400 sm:text-base">
+              Converse por vídeo com quem fala outro idioma. Vocês falam naturalmente; o LinguaCall mostra as legendas e pode ler a tradução em voz.
+            </p>
+
+            <div class="mt-7 grid grid-cols-3 gap-2 sm:gap-4">
+              <div class="flex flex-col items-center gap-2 text-center sm:block sm:text-left">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-accent-300 sm:mb-3">
+                  <i data-lucide="captions" class="h-[18px] w-[18px]"></i>
+                </div>
+                <div>
+                  <p class="text-[11px] font-bold text-neutral-100 sm:text-xs">Legendas instantâneas</p>
+                  <p class="hidden mt-0.5 text-[11px] leading-4 text-neutral-500 sm:block">Acompanhe cada frase</p>
+                </div>
               </div>
-              <p class="text-[13px] text-neutral-300 mt-2 leading-relaxed border-l-2 border-accent-500/60 pl-3">
-                "Criei o LinguaCall com o intuito de ajudar as pessoas a se comunicarem de uma forma melhor. Feito para aproximar os amigos que não falam o mesmo idioma e os amores que as pessoas encontram por meio do mundo digital."
-              </p>
-              <div class="mt-2.5 flex items-center justify-between text-[10px] text-neutral-400 flex-wrap gap-1.5">
-                <span class="flex items-center gap-1 text-ok-400 font-medium">
-                  <i data-lucide="shield-check" class="w-3 h-3"></i>
-                  Open Source Não Comercial (Proibida venda de terceiros)
+              <div class="flex flex-col items-center gap-2 text-center sm:block sm:text-left">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-accent-300 sm:mb-3">
+                  <i data-lucide="audio-lines" class="h-[18px] w-[18px]"></i>
+                </div>
+                <div>
+                  <p class="text-[11px] font-bold text-neutral-100 sm:text-xs">Voz no seu idioma</p>
+                  <p class="hidden mt-0.5 text-[11px] leading-4 text-neutral-500 sm:block">Ouça sem parar para ler</p>
+                </div>
+              </div>
+              <div class="flex flex-col items-center gap-2 text-center sm:block sm:text-left">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-accent-300 sm:mb-3">
+                  <i data-lucide="shield-check" class="h-[18px] w-[18px]"></i>
+                </div>
+                <div>
+                  <p class="text-[11px] font-bold text-neutral-100 sm:text-xs">Sem assinatura</p>
+                  <p class="hidden mt-0.5 text-[11px] leading-4 text-neutral-500 sm:block">Grátis e sem cadastro</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="conversation-preview mt-9 hidden max-w-[520px] rounded-[26px] border border-line bg-surface/80 p-5 shadow-soft lg:block">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">Uma conversa, dois idiomas</span>
+                <span class="flex items-center gap-1.5 text-[10px] font-semibold text-ok-400">
+                  <span class="h-1.5 w-1.5 rounded-full bg-ok-400"></span>
+                  Ao vivo
                 </span>
-                <button id="btnOpenCreatorDetails" class="text-accent-400 hover:text-accent-300 font-medium underline flex items-center gap-1 transition">
-                  Manifesto &amp; Detalhes
-                  <i data-lucide="arrow-right" class="w-3 h-3"></i>
+              </div>
+              <div class="mt-5 space-y-3">
+                <div class="flex items-end gap-3">
+                  <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-500/15 text-[10px] font-extrabold text-accent-300">PT</div>
+                  <div class="max-w-[80%] rounded-[18px_18px_18px_5px] border border-line bg-raised px-4 py-3 text-sm font-medium text-neutral-100">Prazer em conhecer você.</div>
+                </div>
+                <div class="flex items-end justify-end gap-3">
+                  <div class="max-w-[80%] rounded-[18px_18px_5px_18px] bg-accent-500 px-4 py-3 text-sm font-bold text-accent-ink">Nice to meet you.</div>
+                  <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-ok-500/15 text-[10px] font-extrabold text-ok-400">EN</div>
+                </div>
+              </div>
+              <div class="mt-5 flex items-center gap-2 border-t border-line pt-4 text-[11px] text-neutral-500">
+                <i data-lucide="volume-2" class="h-3.5 w-3.5 text-accent-400"></i>
+                Tradução escrita e leitura em voz, lado a lado.
+              </div>
+            </div>
+          </section>
+
+          <section class="call-card relative rounded-[28px] border border-line bg-surface p-5 shadow-soft sm:p-7 lg:p-8" aria-labelledby="newCallTitle">
+            <div class="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-accent-400/60 to-transparent"></div>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="newCallTitle" class="font-display text-xl font-extrabold tracking-[-0.035em] text-white sm:text-[22px]">Comece uma conversa</h2>
+                <p class="mt-1 text-xs text-neutral-500">Escolha seus idiomas e crie um link.</p>
+              </div>
+              <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-accent-500/10 text-accent-300">
+                <i data-lucide="video" class="h-5 w-5"></i>
+              </div>
+            </div>
+
+            <div class="mt-6 space-y-5">
+              <div>
+                <label for="inputUserName" class="mb-2 block text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Seu nome</label>
+                <div class="relative">
+                  <i data-lucide="user-round" class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500"></i>
+                  <input type="text" id="inputUserName" autocomplete="nickname" placeholder="Ex: Lucas" value="Você" class="h-12 w-full rounded-xl border border-line bg-bg pl-10 pr-3.5 text-sm font-medium text-neutral-100 placeholder:text-neutral-600 focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/10 transition">
+                </div>
+              </div>
+
+              <div class="relative grid grid-cols-2 gap-3">
+                <div>
+                  <label for="selectSpeakLang" class="mb-2 block text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Você fala</label>
+                  <select id="selectSpeakLang" class="h-12 w-full cursor-pointer appearance-none rounded-xl border border-line bg-bg bg-no-repeat px-3 pr-8 text-xs font-semibold text-neutral-100 focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/10 transition" style="background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2394a3b8%22 stroke-width=%222%22><path d=%22M6 9l6 6 6-6%22/></svg>');background-position:right 12px center">
+                    <option value="pt-BR" selected>Português (BR)</option>
+                    <option value="en-US">Inglês (EUA)</option>
+                    <option value="es-ES">Espanhol</option>
+                    <option value="fr-FR">Francês</option>
+                    <option value="de-DE">Alemão</option>
+                    <option value="it-IT">Italiano</option>
+                    <option value="ja-JP">Japonês</option>
+                    <option value="zh-CN">Chinês</option>
+                    <option value="ru-RU">Russo</option>
+                    <option value="ar-SA">Árabe</option>
+                    <option value="hi-IN">Hindi (Índia)</option>
+                    <option value="ko-KR">Coreano</option>
+                    <option value="tr-TR">Turco</option>
+                    <option value="id-ID">Indonésio</option>
+                    <option value="nl-NL">Holandês</option>
+                    <option value="pl-PL">Polonês</option>
+                    <option value="th-TH">Tailandês</option>
+                    <option value="vi-VN">Vietnamita</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="selectTargetLang" class="mb-2 block text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Você lê em</label>
+                  <select id="selectTargetLang" class="h-12 w-full cursor-pointer appearance-none rounded-xl border border-line bg-bg bg-no-repeat px-3 pr-8 text-xs font-semibold text-neutral-100 focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/10 transition" style="background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2394a3b8%22 stroke-width=%222%22><path d=%22M6 9l6 6 6-6%22/></svg>');background-position:right 12px center">
+                    <option value="pt" selected>Português</option>
+                    <option value="en">Inglês</option>
+                    <option value="es">Espanhol</option>
+                    <option value="fr">Francês</option>
+                    <option value="de">Alemão</option>
+                    <option value="it">Italiano</option>
+                    <option value="ja">Japonês</option>
+                    <option value="zh">Chinês</option>
+                    <option value="ru">Russo</option>
+                    <option value="ar">Árabe</option>
+                    <option value="hi">Hindi (Índia)</option>
+                    <option value="ko">Coreano</option>
+                    <option value="tr">Turco</option>
+                    <option value="id">Indonésio</option>
+                    <option value="nl">Holandês</option>
+                    <option value="pl">Polonês</option>
+                    <option value="th">Tailandês</option>
+                    <option value="vi">Vietnamita</option>
+                  </select>
+                </div>
+                <button id="btnSwapLanguages" type="button" class="absolute left-1/2 top-0 z-10 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border border-line bg-surface text-neutral-500 transition hover:border-accent-500/40 hover:text-accent-300" title="Trocar idiomas" aria-label="Trocar idiomas">
+                  <i data-lucide="arrow-left-right" class="h-3.5 w-3.5"></i>
+                </button>
+              </div>
+
+              <div class="rounded-2xl border border-line bg-bg/60 p-3.5">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="flex items-center gap-2 text-xs font-bold text-neutral-300">
+                    <i data-lucide="mic" class="h-4 w-4 text-accent-400"></i>
+                    Teste de microfone
+                  </span>
+                  <button id="btnTestMicLobby" class="rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-accent-300 transition hover:bg-accent-500/10">Testar áudio</button>
+                </div>
+                <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-raised">
+                  <div id="micVolumeBar" class="h-full w-0 rounded-full bg-accent-500 transition-all duration-75"></div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between gap-4">
+                <span class="flex items-center gap-2 text-xs font-bold text-neutral-300">
+                  <i data-lucide="camera" class="h-4 w-4 text-accent-400"></i>
+                  Entrar com câmera ligada
+                </span>
+                <label class="relative inline-flex flex-shrink-0 cursor-pointer items-center">
+                  <input type="checkbox" id="checkStartWithVideo" checked class="sr-only peer" aria-label="Entrar com câmera ligada">
+                  <div class="h-6 w-11 rounded-full bg-line transition peer-checked:bg-accent-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-all peer-checked:after:translate-x-5"></div>
+                </label>
+              </div>
+
+              <button id="btnCreateRoom" class="flex h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-5 text-sm font-extrabold text-accent-ink shadow-glow transition hover:-translate-y-0.5 hover:bg-accent-400 active:translate-y-0 active:scale-[0.99]">
+                <i data-lucide="plus-circle" class="h-[18px] w-[18px]"></i>
+                <span>Criar nova sala</span>
+              </button>
+
+              <div class="relative flex items-center py-0.5">
+                <div class="flex-grow border-t border-line"></div>
+                <span class="mx-3 flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-600">ou entre com um código</span>
+                <div class="flex-grow border-t border-line"></div>
+              </div>
+
+              <div class="flex gap-2.5">
+                <div class="relative min-w-0 flex-1">
+                  <i data-lucide="link" class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-600"></i>
+                  <input type="text" id="inputRoomCode" placeholder="Código ou link da sala" class="h-12 w-full rounded-xl border border-line bg-bg pl-10 pr-3 text-xs font-medium text-neutral-100 placeholder:text-neutral-600 focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/10 transition">
+                </div>
+                <button id="btnJoinRoom" class="h-12 flex-shrink-0 rounded-xl border border-line bg-raised px-5 text-xs font-extrabold text-neutral-100 transition hover:border-neutral-600 hover:bg-line">
+                  Entrar
                 </button>
               </div>
             </div>
-          </div>
+
+            <div class="mt-6 flex items-center justify-center gap-2 border-t border-line pt-5 text-[10px] font-semibold text-neutral-500">
+              <i data-lucide="lock-keyhole" class="h-3.5 w-3.5 text-ok-400"></i>
+              Sem cartão, sem cadastro e sem API paga
+            </div>
+          </section>
         </div>
 
-        <!-- FORMULÁRIO DE ENTRADA NA CHAMADA -->
-        <div class="bg-surface border border-line rounded-lg p-5 sm:p-6 space-y-4">
-          <div class="flex items-center justify-between pb-1">
-            <h2 class="text-[13px] font-semibold text-neutral-100 flex items-center gap-2">
-              <i data-lucide="video" class="w-4 h-4 text-accent-400"></i>
-              Nova Ligação Internacional
-            </h2>
-            <span class="text-[11px] text-neutral-400">Sem limite de tempo</span>
+        <footer class="mt-9 flex flex-col items-center justify-between gap-3 border-t border-line pt-5 sm:flex-row">
+          <div class="flex items-center gap-2.5">
+            <div class="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-raised text-[9px] font-extrabold text-accent-300">KM</div>
+            <p class="text-[11px] text-neutral-500">Criado por <span class="font-bold text-neutral-300">Kaynan Monteiro</span></p>
           </div>
-
-          <div>
-            <label class="block text-[11px] font-medium text-neutral-400 mb-1.5">Seu Nome</label>
-            <input type="text" id="inputUserName" placeholder="Ex: Lucas" value="Você" class="w-full bg-bg border border-line rounded-lg px-3 py-2.5 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:border-accent-500 transition">
-          </div>
-
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label class="block text-[11px] font-medium text-neutral-400 mb-1.5">Você fala</label>
-              <select id="selectSpeakLang" class="w-full bg-bg border border-line rounded-lg px-3 py-2.5 text-sm text-neutral-100 appearance-none bg-no-repeat focus:outline-none focus:border-accent-500" style="background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239a9aa3%22 stroke-width=%222%22><path d=%22M6 9l6 6 6-6%22/></svg>');background-position:right 10px center">
-                <option value="pt-BR" selected>Português (BR)</option>
-                <option value="en-US">Inglês (EUA)</option>
-                <option value="es-ES">Espanhol</option>
-                <option value="fr-FR">Francês</option>
-                <option value="de-DE">Alemão</option>
-                <option value="it-IT">Italiano</option>
-                <option value="ja-JP">Japonês</option>
-                <option value="zh-CN">Chinês</option>
-                <option value="ru-RU">Russo</option>
-                <option value="ar-SA">Árabe</option>
-                <option value="hi-IN">Hindi (Índia)</option>
-                <option value="ko-KR">Coreano</option>
-                <option value="tr-TR">Turco</option>
-                <option value="id-ID">Indonésio</option>
-                <option value="nl-NL">Holandês</option>
-                <option value="pl-PL">Polonês</option>
-                <option value="th-TH">Tailandês</option>
-                <option value="vi-VN">Vietnamita</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-[11px] font-medium text-neutral-400 mb-1.5">Você lê em</label>
-              <select id="selectTargetLang" class="w-full bg-bg border border-line rounded-lg px-3 py-2.5 text-sm text-neutral-100 appearance-none bg-no-repeat focus:outline-none focus:border-accent-500" style="background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239a9aa3%22 stroke-width=%222%22><path d=%22M6 9l6 6 6-6%22/></svg>');background-position:right 10px center">
-                <option value="pt" selected>Português</option>
-                <option value="en">Inglês</option>
-                <option value="es">Espanhol</option>
-                <option value="fr">Francês</option>
-                <option value="de">Alemão</option>
-                <option value="it">Italiano</option>
-                <option value="ja">Japonês</option>
-                <option value="zh">Chinês</option>
-                <option value="ru">Russo</option>
-                <option value="ar">Árabe</option>
-                <option value="hi">Hindi (Índia)</option>
-                <option value="ko">Coreano</option>
-                <option value="tr">Turco</option>
-                <option value="id">Indonésio</option>
-                <option value="nl">Holandês</option>
-                <option value="pl">Polonês</option>
-                <option value="th">Tailandês</option>
-                <option value="vi">Vietnamita</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Teste de Microfone -->
-          <div class="py-1 space-y-2">
-            <div class="flex items-center justify-between text-xs">
-              <span class="text-neutral-300 flex items-center gap-1.5">
-                <i data-lucide="mic" class="w-3.5 h-3.5 text-accent-400"></i>
-                Teste de Microfone
-              </span>
-              <button id="btnTestMicLobby" class="text-[11px] text-accent-400 hover:text-accent-300">Testar áudio</button>
-            </div>
-            <div class="w-full bg-raised h-1 rounded-full overflow-hidden">
-              <div id="micVolumeBar" class="bg-[#16161a] h-full w-0 transition-all duration-75"></div>
-            </div>
-          </div>
-
-          <div class="py-1 flex items-center justify-between">
-            <span class="text-xs text-neutral-300 flex items-center gap-2">
-              <i data-lucide="camera" class="w-4 h-4 text-accent-400"></i>
-              Entrar com câmera ligada
+          <div class="flex items-center gap-3">
+            <span class="hidden items-center gap-1.5 text-[10px] font-semibold text-neutral-500 sm:flex">
+              <i data-lucide="shield-check" class="h-3.5 w-3.5 text-ok-400"></i>
+              Open source não comercial
             </span>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="checkStartWithVideo" checked class="sr-only peer">
-              <div class="w-9 h-5 bg-line rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-500"></div>
-            </label>
-          </div>
-
-          <div class="pt-1">
-            <button id="btnCreateRoom" class="w-full bg-accent-500 hover:bg-accent-400 text-[#0d0d0f] font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition active:scale-[0.99]">
-              <i data-lucide="plus-circle" class="w-4 h-4"></i>
-              <span>Criar Nova Sala</span>
+            <button id="btnOpenCreatorDetails" class="flex items-center gap-1.5 text-[11px] font-bold text-accent-300 transition hover:text-accent-200">
+              Manifesto &amp; detalhes
+              <i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>
             </button>
           </div>
-
-          <div class="relative flex py-1 items-center">
-            <div class="flex-grow border-t border-line"></div>
-            <span class="flex-shrink mx-3 text-[11px] text-neutral-500">ou entrar com código</span>
-            <div class="flex-grow border-t border-line"></div>
-          </div>
-
-          <div class="flex gap-2">
-            <input type="text" id="inputRoomCode" placeholder="Código ou link da sala" class="flex-1 bg-bg border border-line rounded-lg px-3 py-2.5 text-xs text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:border-accent-500">
-            <button id="btnJoinRoom" class="px-4 h-[42px] bg-raised hover:bg-line text-neutral-100 text-xs font-medium rounded-lg transition">
-              Entrar
-            </button>
-          </div>
-
-        </div>
-
+        </footer>
       </div>
     </div>
 
@@ -329,10 +377,10 @@
       <div id="virtualRingLightOverlay" class="pointer-events-none fixed inset-0 border-[16px] md:border-[28px] border-amber-100/35 rounded-none shadow-none z-40 hidden transition-all duration-300"></div>
 
       <!-- LADO ESQUERDO: ÁREA DE VÍDEOS E CONTROLES -->
-      <div class="flex-1 h-full flex flex-col bg-bg md:border md:border-line md:rounded-lg overflow-hidden relative min-h-0">
+      <div class="call-workspace flex-1 h-full flex flex-col bg-bg md:border md:border-line overflow-hidden relative min-h-0">
         
         <!-- Barra Superior Dentro da Chamada -->
-        <div class="h-12 border-b border-line px-2 sm:px-3 flex items-center gap-2 bg-surface flex-shrink-0 z-30 overflow-x-auto no-scrollbar">
+        <div class="call-toolbar h-[52px] border-b border-line px-2 sm:px-3 flex items-center gap-2 bg-surface flex-shrink-0 z-30 overflow-x-auto no-scrollbar">
           <!-- Estado da chamada -->
           <div class="flex items-center gap-1.5 pl-1 pr-2 flex-shrink-0">
             <span class="w-1.5 h-1.5 rounded-full bg-ok-500"></span>
@@ -451,7 +499,7 @@
         </div>
 
         <!-- CONVITE: visível dentro da chamada, inclusive no celular -->
-        <div class="px-3 py-2 border-b border-line bg-surface flex items-center gap-2 flex-shrink-0">
+        <div class="invite-bar px-3 py-2 border-b border-line bg-surface flex items-center gap-2 flex-shrink-0">
           <i data-lucide="link" class="w-3.5 h-3.5 text-neutral-500 flex-shrink-0"></i>
           <input id="inviteLinkInput" type="text" readonly value="Entrando na sala..."
                  class="flex-1 min-w-0 bg-bg border border-line rounded-md px-2.5 h-8 text-[11px] text-neutral-300 font-mono focus:outline-none focus:border-accent-500"
@@ -482,12 +530,12 @@
         </div>
 
         <!-- ÁREA DOS VÍDEOS: GRADE DE 2 COLUNAS NO COMPUTADOR / RESPONSIVO NO CELULAR -->
-        <div class="flex-1 w-full relative overflow-hidden bg-bg p-2 sm:p-3 min-h-0">
+        <div class="call-stage flex-1 w-full relative overflow-hidden bg-bg p-2 sm:p-3 min-h-0">
           
           <div class="w-full h-full grid grid-cols-1 md:grid-cols-2 grid-rows-2 md:grid-rows-1 gap-2 sm:gap-3 relative min-h-0">
             
             <!-- CARD 1: COLEGA REMOTO -->
-            <div id="remoteContainer" class="w-full h-full min-h-0 relative flex items-center justify-center bg-surface border border-line rounded-lg overflow-hidden">
+            <div id="remoteContainer" class="video-card w-full h-full min-h-0 relative flex items-center justify-center bg-surface border border-line overflow-hidden">
               
               <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover hidden transition-all duration-300"></video>
 
@@ -522,7 +570,7 @@
             </div>
 
             <!-- CARD 2: PARTICIPANTE LOCAL -->
-            <div id="localContainer" class="w-full h-full min-h-0 relative flex items-center justify-center bg-surface border border-line rounded-lg overflow-hidden">
+            <div id="localContainer" class="video-card w-full h-full min-h-0 relative flex items-center justify-center bg-surface border border-line overflow-hidden">
               
               <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover -scale-x-100 hidden transition-all duration-300"></video>
               <video id="localSecondVideo" autoplay playsinline muted class="w-full h-1/2 object-cover border-t border-accent-500/40 hidden"></video>
@@ -595,7 +643,7 @@
         </div>
 
         <!-- BARRA DE CONTROLES INFERIOR (fixa no rodapé no celular) -->
-        <div class="h-[68px] border-t border-line bg-surface px-3 sm:px-5 flex items-center justify-between gap-2 flex-shrink-0 z-30">
+        <div class="call-bottom-bar h-[76px] border-t border-line bg-surface px-3 sm:px-5 flex items-center justify-between gap-2 flex-shrink-0 z-30">
           <div class="flex items-center gap-1.5 sm:gap-2">
             <button id="btnToggleMic" class="w-11 h-11 rounded-full bg-raised hover:bg-line text-neutral-100 flex items-center justify-center transition active:scale-95" title="Microfone (M)" aria-label="Microfone">
               <i data-lucide="mic" id="iconMic" class="w-5 h-5"></i>
@@ -637,7 +685,7 @@
       </div>
 
       <!-- LADO DIREITO: HISTÓRICO DE CHAT COM VOCABULÁRIO -->
-      <div id="chatDrawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-84 md:w-80 lg:w-88 bg-surface border-l border-line flex flex-col transform translate-x-full md:translate-x-0 md:relative md:inset-auto md:h-full md:rounded-lg md:border transition-transform duration-300 flex-shrink-0 min-h-0">
+      <div id="chatDrawer" class="chat-drawer fixed inset-y-0 right-0 z-50 w-full sm:w-84 md:w-80 lg:w-88 bg-surface border-l border-line flex flex-col transform translate-x-full md:translate-x-0 md:relative md:inset-auto md:h-full md:border transition-transform duration-300 flex-shrink-0 min-h-0">
         
         <div class="px-3 pt-3 pb-2.5 border-b border-line flex-shrink-0">
           <div class="flex items-center justify-between mb-2.5">
@@ -667,7 +715,7 @@
         </div>
 
         <!-- Abas do Histórico (Conversa Normal vs Vocabulário Marcado) -->
-        <div class="flex border-b border-line text-[11px] font-medium">
+        <div class="chat-tabs flex border-b border-line text-[11px] font-medium">
           <button id="tabChatAll" class="flex-1 h-9 border-b-2 border-accent-500 text-neutral-100">Falas</button>
           <button id="tabChatLive" class="flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300">Legendas</button>
           <button id="tabChatSaved" class="flex-1 h-9 border-b-2 border-transparent text-neutral-500 hover:text-neutral-300">Salvos <span id="savedVocabCount" class="tabular-nums">0</span></button>
@@ -690,7 +738,7 @@
         </div>
 
         <!-- Digitação Fallback -->
-        <div class="p-2.5 border-t border-line flex flex-col gap-2 flex-shrink-0">
+        <div class="chat-composer p-2.5 border-t border-line flex flex-col gap-2 flex-shrink-0">
           <div class="h-4 text-[10px] text-ok-400 italic flex items-center gap-1.5 px-0.5">
             <span id="typingIndicator" class="hidden flex items-center gap-1.5">
               <span class="flex items-end gap-0.5">
@@ -720,7 +768,7 @@
 
   <!-- MODAL: REUNIÕES PASSADAS -->
   <div id="savedCallsModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-lg w-full max-h-[85vh] flex flex-col p-5">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col p-5">
       <div class="flex items-center justify-between pb-3 border-b border-line">
         <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
           <i data-lucide="archive" class="w-4 h-4 text-accent-400"></i>
@@ -750,7 +798,7 @@
 
   <!-- MODAL: VISUALIZAR CONVERSA PASSADA -->
   <div id="viewSpecificCallModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-lg w-full max-h-[85vh] flex flex-col p-5">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col p-5">
       <div class="flex items-center justify-between pb-3 border-b border-line">
         <div>
           <h3 class="font-semibold text-sm text-neutral-100" id="viewSpecificCallTitle">Reunião</h3>
@@ -775,7 +823,7 @@
 
   <!-- MODAL: MODO SEGURO DE ESCUTA (não depende do reconhecimento do navegador) -->
   <div id="safeMicModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-md w-full max-h-[88vh] flex flex-col p-5">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-md w-full max-h-[88vh] flex flex-col p-5">
       <div class="flex items-center justify-between pb-3 border-b border-line">
         <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
           <i data-lucide="mic" class="w-4 h-4 text-neutral-500"></i>
@@ -830,7 +878,7 @@
 
   <!-- MODAL: DIAGNÓSTICO DE VOZ (por que a fala não está entrando) -->
   <div id="voiceDiagModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-lg w-full max-h-[88vh] flex flex-col p-5">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-lg w-full max-h-[88vh] flex flex-col p-5">
       <div class="flex items-center justify-between pb-3 border-b border-line">
         <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
           <i data-lucide="activity" class="w-4 h-4 text-neutral-500"></i>
@@ -936,7 +984,7 @@
 
   <!-- MODAL: ESTATÍSTICAS -->
   <div id="statsModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-sm w-full p-5">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-sm w-full p-5">
       <div class="flex items-center justify-between pb-3 border-b border-line">
         <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
           <i data-lucide="bar-chart-2" class="w-4 h-4 text-accent-400"></i>
@@ -977,7 +1025,7 @@
 
   <!-- MODAL: FILTROS DE CÂMERA -->
   <div id="filtersModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-xs w-full p-5">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-xs w-full p-5">
       <div class="flex items-center justify-between pb-3 border-b border-line">
         <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
           <i data-lucide="sparkles" class="w-4 h-4 text-accent-400"></i>
@@ -1007,7 +1055,7 @@
 
   <!-- MODAL CONFIGURAÇÕES -->
   <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-md w-full p-6">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-md w-full p-6">
       <div class="flex items-center justify-between pb-3.5 border-b border-line">
         <h3 class="font-semibold text-sm text-neutral-100 flex items-center gap-2">
           <i data-lucide="sliders" class="w-4 h-4 text-accent-400"></i>
@@ -1058,7 +1106,7 @@
 
   <!-- MODAL OFICIAL: SOBRE O CRIADOR KAYNAN MONTEIRO -->
   <div id="aboutCreatorModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-    <div class="bg-surface border border-line rounded-lg max-w-lg w-full p-6 relative">
+    <div class="modal-card bg-surface border border-line rounded-2xl max-w-lg w-full p-6 relative">
 
       <div class="flex items-center justify-between pb-3.5 border-b border-line">
         <div class="flex items-center gap-2">
