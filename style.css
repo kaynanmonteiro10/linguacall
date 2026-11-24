@@ -1,8 +1,15 @@
 /* Custom Styles LinguaCall */
 
+/* Otimização para visualização em telas de toque (Mobile) */
+html, body {
+  height: 100%;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -37,10 +44,10 @@
   animation: audioPulse 1.4s ease-out infinite;
 }
 
-@keyframes fadeInOverlay {
+@keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -48,6 +55,6 @@
   }
 }
 
-.animate-fade-in {
-  animation: fadeInOverlay 0.25s ease-out forwards;
+.animate-fade-up {
+  animation: fadeUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
