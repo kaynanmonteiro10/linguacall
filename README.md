@@ -44,7 +44,7 @@ O **LinguaCall Pro** agora é um **Progressive Web App (PWA)** completo:
 
 ## 🛠️ Arquitetura e Tecnologias
 
-- **WebRTC P2P (PeerJS):** Comunicação direta quando possível, com relay TURN da Metered como reserva para redes que não permitem a conexão direta.
+- **WebRTC P2P (PeerJS):** Comunicação direta quando possível, com relay TURN da Metered como reserva para redes que não permitem a conexão direta. A biblioteca PeerJS é servida pelo próprio site para não depender de um CDN externo ao abrir a chamada.
 - **Web Speech API:** Transcrição de fala em tempo real pelo próprio navegador, sem chave de API.
 - **Transcrição no Android:** O áudio da chamada também alimenta um modelo Whisper pequeno no próprio aparelho, evitando a disputa pelo microfone entre WebRTC e Web Speech. No primeiro uso, o navegador baixa o modelo (cerca de 40 MB) e pode levar algum tempo para prepará-lo. O app mostra esse estado na barra de escuta. O modelo é carregado do Hugging Face e a biblioteca de transcrição do jsDelivr; depois do carregamento, o áudio da transcrição fica no aparelho. Em celulares lentos, as legendas podem chegar com atraso.
 - **Tradução Gratuita:** Google Translate como motor principal e MyMemory como reserva, ambos sem chave.

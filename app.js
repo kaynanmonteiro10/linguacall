@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnInstallPwa = document.getElementById('btnInstallPwa');
 
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./sw.js?v=22').then((reg) => {
+    navigator.serviceWorker.register('./sw.js?v=23').then((reg) => {
       console.log('PWA Service Worker registrado com sucesso!');
       // Busca um service worker novo a cada abertura e recarrega uma vez
       // quando ele assume — é assim que a correção chega sem "limpar cache".
@@ -223,6 +223,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const roomFromUrl = urlParams.get('room');
   if (roomFromUrl && inputRoomCode) inputRoomCode.value = roomFromUrl;
+  if (roomFromUrl) {
+    const createLabel = document.querySelector('#btnCreateRoom span');
+    if (createLabel) createLabel.textContent = 'Entrar na conversa do convite';
+  }
 
   // ==========================================
   // BEEP SONORO SUAVE (WEB AUDIO SYNTH)
@@ -1486,8 +1490,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on('btnCreateRoom', 'click', async () => {
     primeAndroidAudio();
-    state.isInitiator = true;
-    const roomId = generateRoomId();
+    state.isInitiator = !roomFromUrl;
+    const roomId = roomFromUrl || generateRoomId();
     await startCallFlow(roomId);
   });
 
@@ -1506,17 +1510,22 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   async function startCallFlow(roomId) {
+    let mediaReady = false;
     try {
       updateConnectionBadge('Pedindo microfone...', 'connecting');
       const wantVideo = checkStartWithVideo ? checkStartWithVideo.checked : true;
       const iceReady = loadIceServers();
       await requestUserMedia(wantVideo, 'user');
+      mediaReady = true;
       await iceReady;
+      if (typeof window.Peer !== 'function') throw new Error('Biblioteca de chamadas não carregou');
 
       setupCallUI(roomId);
       createPeerConnection(roomId);
     } catch (e) {
-      updateConnectionBadge('Permissão negada', 'error');
+      console.error('Falha ao iniciar chamada:', e);
+      updateConnectionBadge(mediaReady ? 'Falha ao iniciar chamada' : 'Microfone indisponível', 'error');
+      if (mediaReady) showNotification('Não foi possível iniciar a chamada. Reabra o link e tente novamente.');
     }
   }
 
