@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>STT smoke test</title>
+<pre id="status">iniciando</pre>
+<script>
+  const status = document.getElementById('status');
+  try {
+    const worker = new Worker('./android-stt-worker.js', { type: 'module' });
+    worker.onmessage = ({ data }) => {
+      status.textContent += '\n' + JSON.stringify(data);
+      if (data.type === 'ready') {
+        worker.postMessage({type:'transcribe', audio:new Float32Array(16000), lang:'pt-BR'});
+      }
+    };
+    worker.onerror = (event) => { status.textContent += '\nERROR ' + event.message; };
+    worker.postMessage({type:'load'});
+  } catch (error) { status.textContent += '\nTHROW ' + error.message; }
+</script>
