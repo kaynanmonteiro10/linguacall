@@ -3,13 +3,14 @@
  * Desenvolvido por Kaynan Monteiro
  */
 
-const CACHE_NAME = 'linguacall-cache-v23';
+const CACHE_NAME = 'linguacall-cache-v24';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './app.js?v=23',
+  './app.js?v=24',
   './peerjs.min.js?v=23',
+  './metered-realtime.umd.js?v=24',
   './android-stt-worker.js?v=21',
   './android-stt-processor.js?v=21',
   './manifest.json',

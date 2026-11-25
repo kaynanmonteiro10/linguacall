@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnInstallPwa = document.getElementById('btnInstallPwa');
 
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./sw.js?v=23').then((reg) => {
+    navigator.serviceWorker.register('./sw.js?v=24').then((reg) => {
       console.log('PWA Service Worker registrado com sucesso!');
       // Busca um service worker novo a cada abertura e recarrega uma vez
       // quando ele assume — é assim que a correção chega sem "limpar cache".
@@ -163,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
     activeTab: 'all', // 'all' ou 'saved'
     
     peer: null,
+    signalingMode: null,
+    remotePeer: null,
     call: null,
     dataConnection: null,
     localStream: null,
@@ -1278,7 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function generateRoomId() {
-    return 'room-' + Math.random().toString(36).substring(2, 8);
+    return 'room-m24-' + Math.random().toString(36).substring(2, 8);
   }
 
   function updateConnectionBadge(text, type = 'ready') {
@@ -1447,7 +1449,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (callTimerDisplay) callTimerDisplay.textContent = `${mins}:${secs}`;
     }, 1000);
 
-    const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+    const version = state.signalingMode === 'metered' ? '&v=24' : '';
+    const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}${version}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
     const inviteInput = document.getElementById('inviteLinkInput');
     if (inviteInput) inviteInput.value = newUrl;
@@ -1514,19 +1517,137 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       updateConnectionBadge('Pedindo microfone...', 'connecting');
       const wantVideo = checkStartWithVideo ? checkStartWithVideo.checked : true;
-      const iceReady = loadIceServers();
       await requestUserMedia(wantVideo, 'user');
       mediaReady = true;
-      await iceReady;
-      if (typeof window.Peer !== 'function') throw new Error('Biblioteca de chamadas não carregou');
+      const useLegacySignaling = !roomId.startsWith('room-m24-');
+      if (useLegacySignaling ? typeof window.Peer !== 'function' : !window.MeteredPeer?.MeteredPeer) {
+        throw new Error('Biblioteca de chamadas não carregou');
+      }
 
+      state.signalingMode = useLegacySignaling ? 'peerjs' : 'metered';
       setupCallUI(roomId);
-      createPeerConnection(roomId);
+      if (useLegacySignaling) {
+        await loadIceServers();
+        createPeerConnection(roomId);
+      } else {
+        await createMeteredConnection(roomId);
+      }
     } catch (e) {
       console.error('Falha ao iniciar chamada:', e);
       updateConnectionBadge(mediaReady ? 'Falha ao iniciar chamada' : 'Microfone indisponível', 'error');
       if (mediaReady) showNotification('Não foi possível iniciar a chamada. Reabra o link e tente novamente.');
     }
+  }
+
+  function closeCurrentPeer() {
+    if (!state.peer) return;
+    try {
+      if (state.signalingMode === 'metered') {
+        Promise.resolve(state.peer.close()).catch(() => {});
+      } else if (!state.peer.destroyed) {
+        state.peer.destroy();
+      }
+    } catch (error) {
+      console.warn('Falha ao fechar conexão anterior:', error);
+    }
+  }
+
+  async function createMeteredConnection(roomId) {
+    const MeteredPeer = window.MeteredPeer?.MeteredPeer;
+    if (!MeteredPeer) throw new Error('Biblioteca Metered não carregou');
+    const peer = new MeteredPeer({ apiKey: 'pk_live_52359e38abb111b99d988fea1c6eb8ecdaf7315b' });
+    state.peer = peer;
+    state.signalingMode = 'metered';
+    const isCurrentPeer = () => state.callActive && state.peer === peer;
+    peer.addStream(state.localStream);
+
+    peer.on('joined', () => {
+      if (!isCurrentPeer()) return;
+      updateConnectionBadge(state.isInitiator ? 'Aguardando colega...' : 'Conectando...', 'connecting');
+      if (!speechRecognizer) initSpeechRecognition();
+      else restartSpeechRecognition(null);
+      updateVoiceDiag();
+      updateSpeechWarningBar();
+      updateCompatNotice();
+      updateListenStatusBar();
+    });
+    peer.on('peer-joined', ({ peer: remote }) => {
+      if (!isCurrentPeer() || state.remotePeer) return;
+      state.remotePeer = remote;
+      state.remotePeerId = remote.id;
+      state.call = {
+        get open() { return remote.state === 'connected'; },
+        get peerConnection() { return remote.pc; },
+        close() {}, removeAllListeners() {}
+      };
+      state.dataConnection = {
+        peer: remote.id,
+        get open() { return peer.state === 'joined'; },
+        send(data) { return peer.sendTo(remote.id, data); },
+        close() {}, removeAllListeners() {}
+      };
+      updateConnectionBadge('Conectando áudio e vídeo...', 'connecting');
+      let playbackStream = new MediaStream();
+      remote.on('connection-reset', () => { playbackStream = new MediaStream(); });
+      remote.on('track', ({ track, streams }) => {
+        if (!isCurrentPeer() || state.remotePeer !== remote) return;
+        const stream = playbackStream;
+        if (!stream.getTracks().includes(track)) stream.addTrack(track);
+        const removePlaybackTrack = () => {
+          stream.removeTrack(track);
+          if (state.remoteStream === stream && track.kind === 'video' && !stream.getVideoTracks().length) {
+            if (remoteVideo) remoteVideo.classList.add('hidden');
+            if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
+          }
+        };
+        track.addEventListener('ended', removePlaybackTrack, { once: true });
+        for (const sourceStream of streams || []) {
+          const onRemoved = (event) => {
+            if (event.track !== track) return;
+            sourceStream.removeEventListener('removetrack', onRemoved);
+            removePlaybackTrack();
+          };
+          sourceStream.addEventListener('removetrack', onRemoved);
+        }
+        attachRemoteStream(stream);
+      });
+      remote.on('state-change', ({ to }) => {
+        if (!isCurrentPeer() || state.remotePeer !== remote) return;
+        if (to === 'connected') markPeerConnected();
+        else if (to === 'reconnecting') updateConnectionBadge('Reconectando chamada...', 'connecting');
+        else if (to === 'closed') updateConnectionBadge('Chamada desconectada', 'error');
+      });
+      peer.sendTo(remote.id, {
+        type: 'handshake', userName: state.userName,
+        speakLang: state.speakLang, hasVideo: state.isVideoEnabled
+      }).catch(error => console.warn('Falha ao enviar apresentação:', error));
+    });
+    peer.on('peer-left', ({ peer: remote }) => {
+      if (!isCurrentPeer() || state.remotePeer !== remote) return;
+      state.remotePeer = null;
+      state.remotePeerId = null;
+      state.call = null;
+      state.dataConnection = null;
+      state.remoteStream = null;
+      if (remoteVideo) { remoteVideo.srcObject = null; remoteVideo.classList.add('hidden'); }
+      if (remoteAvatarBox) remoteAvatarBox.classList.remove('hidden');
+      if (remoteUserNameDisplay) remoteUserNameDisplay.textContent = 'Aguardando colega...';
+      if (remoteStatusIndicator) remoteStatusIndicator.textContent = 'Aguardando colega...';
+      updateConnectionBadge('Aguardando colega...', 'connecting');
+      stopNetworkMonitor();
+    });
+    peer.on('data', ({ senderPeerId, data }) => {
+      if (isCurrentPeer() && senderPeerId === state.remotePeerId) handleIncomingData(data);
+    });
+    peer.on('state-change', ({ to }) => {
+      if (!isCurrentPeer()) return;
+      if (to === 'reconnecting') updateConnectionBadge('Reconectando chamada...', 'connecting');
+      if (to === 'closed') updateConnectionBadge('Conexão encerrada', 'error');
+    });
+    peer.on('error', ({ err }) => {
+      if (isCurrentPeer()) console.error('Erro de sinalização Metered:', err);
+    });
+    await peer.join(roomId);
   }
 
   function createPeerConnection(roomId) {
@@ -1535,7 +1656,9 @@ document.addEventListener('DOMContentLoaded', () => {
     detachConnection(state.dataConnection);
     state.call = null;
     state.dataConnection = null;
-    if (state.peer && !state.peer.destroyed) state.peer.destroy();
+    closeCurrentPeer();
+    state.remotePeer = null;
+    state.signalingMode = 'peerjs';
 
     const peerId = state.isInitiator ? roomId : 'guest-' + Math.random().toString(36).substring(2, 8);
     const peer = new Peer(peerId, { debug: 1, config: rtcConfig });
@@ -1644,6 +1767,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function scheduleReconnect() {
+    if (state.signalingMode === 'metered') return;
     if (!state.callActive || !state.autoReconnect || !state.roomId || state.isReconnecting) return;
     if (state.reconnectAttempts >= 12) {
       updateConnectionBadge('Falha ao reconectar', 'error');
@@ -1745,6 +1869,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function attachRemoteStream(remoteStream) {
+    const firstConnection = !state.hasConnectedBefore;
     state.remoteStream = remoteStream;
     state.hasConnectedBefore = true;
     if (remoteVideo) {
@@ -1768,7 +1893,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyBlurSetting();
     markPeerConnected();
     startNetworkMonitor();
-    playConnectChime();
+    if (firstConnection) playConnectChime();
   }
 
   function setupDataConnectionListeners(conn) {
@@ -1898,7 +2023,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function sendData(dataObj) {
     if (!state.callActive || !state.dataConnection?.open) return false;
     try {
-      state.dataConnection.send(dataObj);
+      const result = state.dataConnection.send(dataObj);
+      if (result?.catch) result.catch(error => console.warn('Falha ao enviar mensagem:', error));
       return true;
     } catch (e) {
       return false;
@@ -3461,16 +3587,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const oldVideoTrack = state.localStream.getVideoTracks()[0];
 
       if (oldVideoTrack) {
+        if (state.signalingMode === 'metered') state.peer?.removeTrack(oldVideoTrack);
         oldVideoTrack.stop();
         state.localStream.removeTrack(oldVideoTrack);
       }
       state.localStream.addTrack(newVideoTrack);
+      if (state.signalingMode === 'metered') state.peer?.addTrack(newVideoTrack, state.localStream);
       state.currentFacingMode = newFacingMode;
 
       if (localVideo) localVideo.srcObject = state.localStream;
       applyMirrorSetting();
 
-      if (state.call?.peerConnection) {
+      if (state.signalingMode !== 'metered' && state.call?.peerConnection) {
         const sender = state.call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
         if (sender) sender.replaceTrack(newVideoTrack);
       }
@@ -3518,7 +3646,9 @@ document.addEventListener('DOMContentLoaded', () => {
           });
           videoTrack = videoStream.getVideoTracks()[0];
           state.localStream.addTrack(videoTrack);
-          if (state.call?.peerConnection) {
+          if (state.signalingMode === 'metered') {
+            state.peer?.addTrack(videoTrack, state.localStream);
+          } else if (state.call?.peerConnection) {
             state.call.peerConnection.addTrack(videoTrack, state.localStream);
           }
         } catch (e) {
@@ -3560,7 +3690,11 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           if (localAvatarBox) localAvatarBox.classList.add('hidden');
 
-          if (state.call?.peerConnection) {
+          if (state.signalingMode === 'metered') {
+            const cameraTrack = state.localStream?.getVideoTracks()[0];
+            if (cameraTrack) state.peer?.removeTrack(cameraTrack);
+            state.peer?.addTrack(screenTrack, screenStream);
+          } else if (state.call?.peerConnection) {
             const sender = state.call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) sender.replaceTrack(screenTrack);
           }
@@ -3575,6 +3709,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function stopScreenShare() {
+    const screenTrack = state.screenStream?.getVideoTracks()[0];
+    if (screenTrack && state.signalingMode === 'metered') {
+      try { state.peer?.removeTrack(screenTrack); } catch (error) { console.warn(error); }
+    }
     if (state.screenStream) {
       state.screenStream.getTracks().forEach(t => t.stop());
       state.screenStream = null;
@@ -3587,7 +3725,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.localStream) {
       const cameraTrack = state.localStream.getVideoTracks()[0];
       if (localVideo) localVideo.srcObject = state.localStream;
-      if (cameraTrack && state.call?.peerConnection) {
+      if (cameraTrack && state.signalingMode === 'metered') {
+        try { state.peer?.addTrack(cameraTrack, state.localStream); } catch (error) { console.warn(error); }
+      } else if (cameraTrack && state.call?.peerConnection) {
         const sender = state.call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
         if (sender) sender.replaceTrack(cameraTrack);
       }
@@ -3618,7 +3758,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function buildInviteUrl() {
-    return `${window.location.origin}${window.location.pathname}?room=${state.roomId}`;
+    const version = state.signalingMode === 'metered' ? '&v=24' : '';
+    return `${window.location.origin}${window.location.pathname}?room=${state.roomId}${version}`;
   }
 
   function shareInvite() {
@@ -3707,11 +3848,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     detachConnection(state.call);
     detachConnection(state.dataConnection);
-    if (state.peer && !state.peer.destroyed) state.peer.destroy();
+    closeCurrentPeer();
 
     state.call = null;
     state.dataConnection = null;
     state.peer = null;
+    state.signalingMode = null;
+    state.remotePeer = null;
     state.localStream = null;
     state.remoteStream = null;
     state.roomId = null;

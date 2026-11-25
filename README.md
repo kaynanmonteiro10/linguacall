@@ -44,7 +44,7 @@ O **LinguaCall Pro** agora é um **Progressive Web App (PWA)** completo:
 
 ## 🛠️ Arquitetura e Tecnologias
 
-- **WebRTC P2P (PeerJS):** Comunicação direta quando possível, com relay TURN da Metered como reserva para redes que não permitem a conexão direta. A biblioteca PeerJS é servida pelo próprio site para não depender de um CDN externo ao abrir a chamada.
+- **Chamadas WebRTC:** Salas novas (`room-m24-*`) usam Metered Realtime Messaging com presença de participantes e TURN integrado. Convites antigos continuam usando PeerJS, servido pelo próprio site, para que os dois participantes de uma sala usem a mesma sinalização.
 - **Web Speech API:** Transcrição de fala em tempo real pelo próprio navegador, sem chave de API.
 - **Transcrição no Android:** O áudio da chamada também alimenta um modelo Whisper pequeno no próprio aparelho, evitando a disputa pelo microfone entre WebRTC e Web Speech. No primeiro uso, o navegador baixa o modelo (cerca de 40 MB) e pode levar algum tempo para prepará-lo. O app mostra esse estado na barra de escuta. O modelo é carregado do Hugging Face e a biblioteca de transcrição do jsDelivr; depois do carregamento, o áudio da transcrição fica no aparelho. Em celulares lentos, as legendas podem chegar com atraso.
 - **Tradução Gratuita:** Google Translate como motor principal e MyMemory como reserva, ambos sem chave.
@@ -68,8 +68,8 @@ O LinguaCall é para chamadas **1:1**. Para melhor compatibilidade, use Chrome o
 
 ## Limitações e privacidade
 
-- A conexão usa STUN e os servidores TURN da Metered. O navegador busca as credenciais da credencial específica do projeto antes de entrar na chamada. Se o serviço TURN estiver indisponível, o app ainda tenta a conexão direta; redes restritivas podem continuar sem conectar. O uso de TURN depende da disponibilidade e da franquia do provedor.
-- Como este site é estático e público, a chave de API de leitura da credencial TURN fica visível no código do navegador. Ela deve ter acesso somente a essa credencial; nunca coloque a Secret key da conta no repositório. Acompanhe o consumo no painel da Metered.
+- Salas novas usam Metered Realtime Messaging, que fornece os servidores TURN para o WebRTC. Convites antigos usam PeerJS com a credencial TURN da Metered. A conexão depende da disponibilidade e da franquia dos serviços.
+- Como este site é estático e público, a chave publishable de sinalização e a chave de API de leitura da credencial TURN ficam visíveis no código do navegador. Restrinja a publishable aos canais `room-*` e às permissões necessárias (`subscribe`, `publish`, `presence`, `send`); nunca coloque a Secret key da conta no repositório. Acompanhe o consumo no painel da Metered.
 - O reconhecimento de fala depende do suporte e da conexão do navegador.
 - O texto reconhecido é enviado ao Google Translate e, em caso de falha, ao MyMemory. Esses serviços recebem o texto da conversa.
 - Áudio e vídeo seguem pela conexão WebRTC; a sinalização do PeerJS é usada para estabelecer a chamada.
