@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnInstallPwa = document.getElementById('btnInstallPwa');
 
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./sw.js').then((reg) => {
+    navigator.serviceWorker.register('./sw.js?v=21').then((reg) => {
       console.log('PWA Service Worker registrado com sucesso!');
       // Busca um service worker novo a cada abertura e recarrega uma vez
       // quando ele assume — é assim que a correção chega sem "limpar cache".
@@ -1463,6 +1463,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   on('btnCreateRoom', 'click', async () => {
+    primeAndroidAudio();
     state.isInitiator = true;
     const roomId = generateRoomId();
     await startCallFlow(roomId);
@@ -1477,6 +1478,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (code.includes('?room=')) {
       code = code.split('?room=')[1].split('&')[0];
     }
+    primeAndroidAudio();
     state.isInitiator = false;
     await startCallFlow(code);
   });
@@ -1939,6 +1941,18 @@ document.addEventListener('DOMContentLoaded', () => {
     busy: false, pending: [], session: 0, error: ''
   };
 
+  function primeAndroidAudio() {
+    if (!useAndroidStt || androidStt.context) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      androidStt.context = new Ctx();
+      androidStt.context.resume().catch(() => {});
+    } catch (error) {
+      androidStt.error = error.message;
+    }
+  }
+
   function resetAndroidSpeech() {
     androidStt.frames = [];
     androidStt.frameCount = 0;
@@ -1974,7 +1988,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     let power = 0;
     for (let i = 0; i < frame.length; i++) power += frame[i] * frame[i];
-    const hasVoice = Math.sqrt(power / frame.length) > 0.008;
+    const hasVoice = Math.sqrt(power / frame.length) > 0.002;
     if (!androidStt.frameCount) {
       if (!hasVoice) {
         androidStt.preroll.push(frame);
@@ -1995,27 +2009,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const track = state.localStream?.getAudioTracks()[0];
     if (!track || track.readyState !== 'live') throw new Error('Faixa de áudio indisponível');
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    const context = new Ctx();
+    const context = androidStt.context || new Ctx();
     androidStt.context = context;
-    await context.audioWorklet.addModule('./android-stt-processor.js');
-    if (androidStt.session !== session || !state.callActive) return;
+    context.onstatechange = () => {
+      if (androidStt.session !== session || !state.callActive) return;
+      if (androidStt.status === 'paused' && context.state === 'running') {
+        androidStt.status = 'ready';
+        updateListenStatusBar();
+        updateVoiceDiag();
+      }
+    };
     const source = context.createMediaStreamSource(new MediaStream([track]));
-    const node = new AudioWorkletNode(context, 'android-stt-processor');
     const silent = context.createGain();
     silent.gain.value = 0;
-    node.port.onmessage = ({ data }) => handleAndroidAudio(data);
-    source.connect(node).connect(silent).connect(context.destination);
     androidStt.source = source;
-    androidStt.node = node;
-    await context.resume();
-    androidStt.status = 'ready';
+    const useScriptProcessor = () => {
+      if (androidStt.session !== session || !state.callActive) return;
+      androidStt.node?.disconnect();
+      source.disconnect();
+      const processor = context.createScriptProcessor(4096, 1, 1);
+      let cursor = 0;
+      let nextOutputPosition = 0;
+      let output = new Float32Array(2048);
+      let outputLength = 0;
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0);
+        const step = context.sampleRate / 16000;
+        for (let i = 0; i < input.length; i++) {
+          if (cursor + i < nextOutputPosition) continue;
+          output[outputLength++] = input[i];
+          nextOutputPosition += step;
+          if (outputLength === output.length) {
+            handleAndroidAudio(output);
+            output = new Float32Array(2048);
+            outputLength = 0;
+          }
+        }
+        cursor += input.length;
+      };
+      source.connect(processor).connect(silent).connect(context.destination);
+      androidStt.node = processor;
+    };
+    try {
+      await context.audioWorklet.addModule('./android-stt-processor.js?v=21');
+      if (androidStt.session !== session || !state.callActive) return;
+      const node = new AudioWorkletNode(context, 'android-stt-processor');
+      let receivedAudio = false;
+      node.port.onmessage = ({ data }) => {
+        receivedAudio = true;
+        handleAndroidAudio(data);
+      };
+      source.connect(node).connect(silent).connect(context.destination);
+      androidStt.node = node;
+      androidStt.fallbackTimer = setTimeout(() => {
+        if (!receivedAudio && context.state === 'running') useScriptProcessor();
+      }, 5000);
+    } catch (error) {
+      useScriptProcessor();
+    }
+    await Promise.race([context.resume().catch(() => {}), new Promise(resolve => setTimeout(resolve, 1500))]);
+    androidStt.status = context.state === 'running' ? 'ready' : 'paused';
     updateListenStatusBar();
     updateVoiceDiag();
   }
 
   function startAndroidStt() {
     if (!useAndroidStt || !state.callActive || androidStt.status === 'loading' || androidStt.status === 'ready') return;
-    stopAndroidStt();
+    if (androidStt.status === 'failed') stopAndroidStt();
+    primeAndroidAudio();
     const session = ++androidStt.session;
     androidStt.status = 'loading';
     androidStt.error = '';
@@ -2031,7 +2092,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     let worker;
     try {
-      worker = new Worker('./android-stt-worker.js', { type: 'module' });
+      worker = new Worker('./android-stt-worker.js?v=21', { type: 'module' });
       androidStt.worker = worker;
     } catch (error) {
       fail(error.message);
@@ -2065,6 +2126,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function stopAndroidStt() {
     androidStt.session++;
+    clearTimeout(androidStt.fallbackTimer);
+    androidStt.fallbackTimer = null;
     androidStt.node?.disconnect();
     androidStt.source?.disconnect();
     androidStt.context?.close().catch(() => {});
@@ -2100,6 +2163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (useAndroidStt) {
       if (androidStt.status === 'loading') setBar('bg-accent-500', 'Preparando transcrição no Android…', false);
+      else if (androidStt.status === 'paused') setBar('bg-accent-500', 'Toque em Religar para ativar a escuta', true);
       else if (androidStt.status === 'failed') setBar('bg-danger-500', 'Transcrição indisponível — toque em Religar', true);
       else if (androidStt.status === 'ready') setBar('bg-ok-500', 'Transcrição local ligada — pode falar', false);
       else setBar('bg-accent-500', 'Iniciando transcrição local…', false);
@@ -2222,9 +2286,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const hint = document.getElementById('diagSpeechHint');
       if (hint) hint.textContent = 'O áudio da chamada está sendo transcrito no próprio aparelho.';
     } else if (useAndroidStt && androidStt.status !== 'idle') {
-      diagSet('diagSpeechStatus', androidStt.status === 'failed' ? 'Falhou' : 'Carregando', 'text-accent-400');
+      diagSet('diagSpeechStatus', androidStt.status === 'failed' ? 'Falhou' : (androidStt.status === 'paused' ? 'Pausada' : 'Carregando'), 'text-accent-400');
       const hint = document.getElementById('diagSpeechHint');
-      if (hint) hint.textContent = androidStt.status === 'failed' ? androidStt.error : 'Baixando o modelo de transcrição. Aguarde antes de falar.';
+      if (hint) hint.textContent = androidStt.status === 'failed' ? androidStt.error : (androidStt.status === 'paused' ? 'Toque em Religar para liberar a captura de áudio.' : 'Baixando o modelo de transcrição. Aguarde antes de falar.');
     } else if (!SpeechRecognition) {
       diagSet('diagSpeechStatus', 'Indisponível', 'text-danger-400');
       const hint = document.getElementById('diagSpeechHint');
@@ -2922,6 +2986,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reinicia a escuta já com o novo idioma (sem isso ela fica parada após a troca)
   function restartSpeechRecognition(reason) {
     if (useAndroidStt) {
+      if (androidStt.status === 'paused' && androidStt.context) {
+        androidStt.context.resume().then(() => {
+          androidStt.status = androidStt.context?.state === 'running' ? 'ready' : 'paused';
+          updateListenStatusBar();
+          updateVoiceDiag();
+        }).catch(() => {});
+        return;
+      }
       startAndroidStt();
       return;
     }
