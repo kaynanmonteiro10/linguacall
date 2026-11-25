@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnInstallPwa = document.getElementById('btnInstallPwa');
 
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./sw.js?v=21').then((reg) => {
+    navigator.serviceWorker.register('./sw.js?v=22').then((reg) => {
       console.log('PWA Service Worker registrado com sucesso!');
       // Busca um service worker novo a cada abertura e recarrega uma vez
       // quando ele assume — é assim que a correção chega sem "limpar cache".
@@ -1453,14 +1453,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // WEBRTC PEERJS
   // ==========================================
 
-  const rtcConfig = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:global.stun.twilio.com:3478' }
-    ]
-  };
+  const fallbackIceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' }
+  ];
+  const turnCredentialsUrl = 'https://monteiro.metered.live/api/v1/turn/credentials?apiKey=dfa8ed9ad0bf7efdc945aefab1d5510a3d6d';
+  let rtcConfig = { iceServers: fallbackIceServers };
+
+  async function loadIceServers() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(turnCredentialsUrl, { cache: 'no-store', signal: controller.signal });
+      if (!response.ok) throw new Error(`TURN HTTP ${response.status}`);
+      const result = await response.json();
+      const servers = Array.isArray(result) ? result : result?.iceServers;
+      if (!Array.isArray(servers) || !servers.some(server => {
+        const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+        return urls.some(url => /^turns?:/i.test(url)) && server.username && server.credential;
+      })) throw new Error('Resposta TURN sem servidor de relay');
+      rtcConfig = { iceServers: [...fallbackIceServers, ...servers] };
+      return true;
+    } catch (error) {
+      console.warn('TURN indisponível; tentando conexão direta:', error);
+      showNotificationOnce('turn-unavailable', 'Servidor de apoio indisponível. Tentando conexão direta.');
+      return false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
   on('btnCreateRoom', 'click', async () => {
     primeAndroidAudio();
@@ -1487,7 +1509,9 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       updateConnectionBadge('Pedindo microfone...', 'connecting');
       const wantVideo = checkStartWithVideo ? checkStartWithVideo.checked : true;
+      const iceReady = loadIceServers();
       await requestUserMedia(wantVideo, 'user');
+      await iceReady;
 
       setupCallUI(roomId);
       createPeerConnection(roomId);
@@ -1625,13 +1649,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const delay = Math.min(8000, 1200 * state.reconnectAttempts);
     updateConnectionBadge(`Reconectando... (${state.reconnectAttempts})`, 'connecting');
 
-    state.reconnectTimer = setTimeout(() => {
+    state.reconnectTimer = setTimeout(async () => {
       state.reconnectTimer = null;
       if (!state.callActive || !state.roomId) {
         state.isReconnecting = false;
         return;
       }
 
+      const reconnectRoomId = state.roomId;
+      await loadIceServers();
+      if (!state.callActive || state.roomId !== reconnectRoomId) return;
       try {
         if (!state.peer || state.peer.destroyed || state.peer.disconnected || !state.peer.open) {
           createPeerConnection(state.roomId);
@@ -1651,7 +1678,7 @@ document.addEventListener('DOMContentLoaded', () => {
           state.isReconnecting = false;
           scheduleReconnect();
         }
-      }, 5000);
+      }, 20000);
     }, delay);
   }
 
@@ -1698,6 +1725,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const conn = state.peer.connect(hostRoomId);
     state.dataConnection = conn;
     setupDataConnectionListeners(conn);
+    if (!state.isReconnecting) {
+      clearTimeout(state.reconnectCheckTimer);
+      state.reconnectCheckTimer = setTimeout(() => {
+        state.reconnectCheckTimer = null;
+        if (state.callActive && !state.isInitiator && state.roomId === hostRoomId &&
+            (!state.dataConnection?.open || !state.call?.open)) scheduleReconnect();
+      }, 20000);
+    }
   }
 
   function attachRemoteStream(remoteStream) {

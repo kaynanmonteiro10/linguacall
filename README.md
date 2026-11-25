@@ -44,7 +44,7 @@ O **LinguaCall Pro** agora é um **Progressive Web App (PWA)** completo:
 
 ## 🛠️ Arquitetura e Tecnologias
 
-- **WebRTC P2P (PeerJS):** Comunicação de vídeo e áudio de ponta a ponta sem servidores intermediários cobrando por tráfego.
+- **WebRTC P2P (PeerJS):** Comunicação direta quando possível, com relay TURN da Metered como reserva para redes que não permitem a conexão direta.
 - **Web Speech API:** Transcrição de fala em tempo real pelo próprio navegador, sem chave de API.
 - **Transcrição no Android:** O áudio da chamada também alimenta um modelo Whisper pequeno no próprio aparelho, evitando a disputa pelo microfone entre WebRTC e Web Speech. No primeiro uso, o navegador baixa o modelo (cerca de 40 MB) e pode levar algum tempo para prepará-lo. O app mostra esse estado na barra de escuta. O modelo é carregado do Hugging Face e a biblioteca de transcrição do jsDelivr; depois do carregamento, o áudio da transcrição fica no aparelho. Em celulares lentos, as legendas podem chegar com atraso.
 - **Tradução Gratuita:** Google Translate como motor principal e MyMemory como reserva, ambos sem chave.
@@ -68,7 +68,8 @@ O LinguaCall é para chamadas **1:1**. Para melhor compatibilidade, use Chrome o
 
 ## Limitações e privacidade
 
-- A conexão usa servidores STUN públicos. Redes com firewall muito restritivo podem exigir TURN e não estão cobertas.
+- A conexão usa STUN e os servidores TURN da Metered. O navegador busca as credenciais da credencial específica do projeto antes de entrar na chamada. Se o serviço TURN estiver indisponível, o app ainda tenta a conexão direta; redes restritivas podem continuar sem conectar. O uso de TURN depende da disponibilidade e da franquia do provedor.
+- Como este site é estático e público, a chave de API de leitura da credencial TURN fica visível no código do navegador. Ela deve ter acesso somente a essa credencial; nunca coloque a Secret key da conta no repositório. Acompanhe o consumo no painel da Metered.
 - O reconhecimento de fala depende do suporte e da conexão do navegador.
 - O texto reconhecido é enviado ao Google Translate e, em caso de falha, ao MyMemory. Esses serviços recebem o texto da conversa.
 - Áudio e vídeo seguem pela conexão WebRTC; a sinalização do PeerJS é usada para estabelecer a chamada.
